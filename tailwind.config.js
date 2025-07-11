@@ -1,0 +1,26 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        orange: {
+          500: '#C45215',
+          600: '#B8470F',
+        },
+        gray: {
+          800: '#1E2A32',
+          900: '#1A252B',
+        },
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
+      animation: {
+        'pulse': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      },
+    },
+  },
+  plugins: [],
+};
