@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import supabaseConnection, { supabase } from '../lib/supabaseConnection';
+import supabaseConnection, { getSupabase } from '../lib/supabaseConnection';
 import type { Blog, Course } from '../types';
 import { useAuth } from '../components/Auth/AuthProvider';
 
@@ -83,6 +83,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Keep-alive ping to prevent Supabase cold starts
     const interval = setInterval(async () => {
       try {
+        const supabase = await getSupabase();
         await supabase.from('blogs').select('id').limit(1);
       } catch (e) {
         // Ignore errors, this is just to keep the backend warm
@@ -93,14 +94,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     if (connectionStatus === 'connected') {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (!session) {
-          // Session expired or invalid. Optionally: show login modal or redirect to login page.
-          // Example: window.location.href = '/login';
-        } else {
-          // Optionally re-fetch user profile and user content
-          refreshUserContent();
-        }
+      getSupabase().then(supabase => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (!session) {
+            // Session expired or invalid. Optionally: show login modal or redirect to login page.
+            // Example: window.location.href = '/login';
+          } else {
+            // Optionally re-fetch user profile and user content
+            refreshUserContent();
+          }
+        });
       });
     }
   }, [connectionStatus]);
@@ -152,6 +155,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setLoading(true);
       
       // Create promises with individual timeouts
+      const supabase = await getSupabase();
       const blogsPromise = Promise.race([
         supabase.from('blogs').select('*').order('created_at', { ascending: false }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Blogs fetch timeout')), 10000))
@@ -215,6 +219,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
       // Fetch user's blogs based on user_id
       try {
+        const supabase = await getSupabase();
         const userBlogsPromise = supabase
           .from('blogs')
           .select('*')
@@ -236,6 +241,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // For courses, admins can see all courses as "their" courses
       if (profile.role === 'admin') {
         try {
+          const supabase = await getSupabase();
           const adminCoursesPromise = supabase
             .from('courses')
             .select('*')
@@ -272,6 +278,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addBlog = async (blog: Omit<Blog, 'id' | 'created_at' | 'updated_at'>) => {
     await ensureConnection();
+    const supabase = await getSupabase();
     try {
       const { data, error } = await supabase
         .from('blogs')
@@ -304,6 +311,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateBlog = async (id: string, updatedBlog: Partial<Blog>) => {
     await ensureConnection();
+    const supabase = await getSupabase();
     try {
       const { data, error } = await supabase
         .from('blogs')
@@ -333,6 +341,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteBlog = async (id: string) => {
     await ensureConnection();
+    const supabase = await getSupabase();
     try {
       const { error } = await supabase
         .from('blogs')
@@ -360,6 +369,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addCourse = async (course: Omit<Course, 'id' | 'created_at' | 'updated_at'>) => {
     await ensureConnection();
+    const supabase = await getSupabase();
     try {
       const { data, error } = await supabase
         .from('courses')
@@ -392,6 +402,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateCourse = async (id: string, updatedCourse: Partial<Course>) => {
     await ensureConnection();
+    const supabase = await getSupabase();
     try {
       const { data, error } = await supabase
         .from('courses')
@@ -421,6 +432,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteCourse = async (id: string) => {
     await ensureConnection();
+    const supabase = await getSupabase();
     try {
       const { error } = await supabase
         .from('courses')

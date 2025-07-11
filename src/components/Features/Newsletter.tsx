@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Send, CheckCircle } from 'lucide-react';
-import { supabase } from '../../lib/supabaseConnection';
+import { getSupabase } from '../../lib/supabaseConnection';
 
 const Newsletter: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -15,6 +15,7 @@ const Newsletter: React.FC = () => {
     setError(null);
 
     try {
+      const supabase = await getSupabase();
       const { error } = await supabase
         .from('newsletter_subscriptions')
         .insert([{ email }]);

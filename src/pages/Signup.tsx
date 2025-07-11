@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Settings, ArrowRight, User, AlertCircle, Wifi, WifiOff, Key, Shield, UserCheck } from 'lucide-react';
-import { supabase } from '../lib/supabaseConnection';
+import { getSupabase } from '../lib/supabaseConnection';
 import { useApp } from '../context/AppContext';
 
 const Signup: React.FC = () => {
@@ -31,6 +31,7 @@ const Signup: React.FC = () => {
     // Check connection status
     const checkConnection = async () => {
       try {
+        const supabase = await getSupabase();
         const { data, error } = await supabase.from('blogs').select('id').limit(1);
         if (error) {
           setConnectionStatus('error');
@@ -47,6 +48,7 @@ const Signup: React.FC = () => {
     // Check if user is already logged in
     const checkUser = async () => {
       try {
+        const supabase = await getSupabase();
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
           navigate('/');
@@ -112,6 +114,7 @@ const Signup: React.FC = () => {
 
     try {
       // Sign up the user
+      const supabase = await getSupabase();
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -142,6 +145,7 @@ const Signup: React.FC = () => {
           ? 'admin'
           : 'user';
         
+        const supabase = await getSupabase();
         const { error: profileError } = await supabase
           .from('user_profiles')
           .upsert([

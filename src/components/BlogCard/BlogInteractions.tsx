@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Heart, MessageCircle, Share2, ExternalLink } from 'lucide-react';
-import { supabase } from '../../lib/supabaseConnection';
+import { getSupabase } from '../../lib/supabaseConnection';
 import { useAuth } from '../Auth/AuthProvider';
 
 interface BlogInteractionsProps {
@@ -25,6 +25,7 @@ const BlogInteractions: React.FC<BlogInteractionsProps> = ({ blogId, onCommentCl
       console.log('Fetching interaction data for blog:', blogId);
       
       // Fetch like count
+      const supabase = await getSupabase();
       const { count: likes } = await supabase
         .from('blog_likes')
         .select('*', { count: 'exact', head: true })
@@ -64,6 +65,7 @@ const BlogInteractions: React.FC<BlogInteractionsProps> = ({ blogId, onCommentCl
 
     setLoading(true);
     try {
+      const supabase = await getSupabase();
       if (liked) {
         // Unlike
         await supabase

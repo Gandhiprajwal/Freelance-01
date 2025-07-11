@@ -2,9 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Calendar, User, Tag, Share2, Heart } from 'lucide-react';
-import { supabase, Blog } from '../lib/supabaseConnection';
+import { getSupabase } from '../lib/supabaseConnection';
 import BlogInteractions from '../components/BlogCard/BlogInteractions';
 import CommentSection from '../components/Comments/CommentSection';
+
+type Blog = {
+  id: string;
+  title: string;
+  content: string;
+  snippet: string;
+  image: string;
+  tags: string[];
+  author: string;
+  featured: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
 
 const BlogDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -18,6 +31,7 @@ const BlogDetail: React.FC = () => {
       if (!id) return;
 
       try {
+        const supabase = await getSupabase();
         const { data, error } = await supabase
           .from('blogs')
           .select('*')
@@ -106,7 +120,7 @@ const BlogDetail: React.FC = () => {
             </div>
             <div className="flex items-center space-x-1">
               <Calendar className="w-4 h-4" />
-              <span>{new Date(blog.created_at).toLocaleDateString()}</span>
+              <span>{new Date(blog.created_at ?? '').toLocaleDateString()}</span>
             </div>
           </div>
 
@@ -170,7 +184,7 @@ const BlogDetail: React.FC = () => {
         onClose={() => setShowComments(false)}
       />
 
-      <style jsx global>{`
+      <style>{`
         .blog-content h1,
         .blog-content h2,
         .blog-content h3,

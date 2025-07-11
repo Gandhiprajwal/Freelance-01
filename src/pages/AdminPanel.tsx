@@ -14,7 +14,7 @@ import {
   Shield,
   Settings
 } from 'lucide-react';
-import { supabase } from '../lib/supabaseConnection';
+import { getSupabase } from '../lib/supabaseConnection';
 import { useAuth } from '../components/Auth/AuthProvider';
 import { Navigate } from 'react-router-dom';
 
@@ -69,6 +69,7 @@ const AdminPanel: React.FC = () => {
         d.setDate(d.getDate() - n);
         return d.toISOString();
       };
+      const supabase = await getSupabase();
       // Current and previous periods (last 7 days, 7-14 days ago)
       const [
         { count: totalUsers },
@@ -113,11 +114,11 @@ const AdminPanel: React.FC = () => {
         if (previous === 0) return current > 0 ? 100 : 0;
         return ((current - previous) / previous) * 100;
       };
-      const usersChange = calcChange(usersCurrent, usersPrevious);
-      const blogsChange = calcChange(blogsCurrent, blogsPrevious);
-      const coursesChange = calcChange(coursesCurrent, coursesPrevious);
-      const likesChange = calcChange(likesCurrent, likesPrevious);
-      const commentsChange = calcChange(commentsCurrent, commentsPrevious);
+      const usersChange = calcChange(usersCurrent ?? 0, usersPrevious ?? 0);
+      const blogsChange = calcChange(blogsCurrent ?? 0, blogsPrevious ?? 0);
+      const coursesChange = calcChange(coursesCurrent ?? 0, coursesPrevious ?? 0);
+      const likesChange = calcChange(likesCurrent ?? 0, likesPrevious ?? 0);
+      const commentsChange = calcChange(commentsCurrent ?? 0, commentsPrevious ?? 0);
       // Fetch popular blogs for this admin
       const { data: popularBlogs } = await supabase
         .from('blogs')

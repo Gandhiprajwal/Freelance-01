@@ -273,6 +273,8 @@ class SupabaseConnection {
 }
 
 const supabaseConnection = new SupabaseConnection();
-export const supabase = await supabaseConnection.getClient();
-export const supabaseReady = supabaseConnection.getClient();
+// Export a function to get the Supabase client (returns a promise)
+export function getSupabase() {
+  return supabaseConnection.getClient();
+}
 export default supabaseConnection;

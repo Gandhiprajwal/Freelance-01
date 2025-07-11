@@ -2,7 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Clock, Users, Star, Play, Download, BookOpen } from 'lucide-react';
-import { supabase, Course } from '../lib/supabaseConnection';
+import { getSupabase } from '../lib/supabaseConnection';
+
+type Course = {
+  id: string;
+  title: string;
+  description: string;
+  content: string;
+  image: string;
+  category: string;
+  duration?: string;
+  featured?: boolean;
+  video_url?: string;
+  created_at?: string;
+  updated_at?: string;
+  materials?: string[];
+};
 
 const CourseDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +30,7 @@ const CourseDetail: React.FC = () => {
       if (!id) return;
 
       try {
+        const supabase = await getSupabase();
         const { data, error } = await supabase
           .from('courses')
           .select('*')
@@ -258,7 +274,7 @@ const CourseDetail: React.FC = () => {
         </div>
       </div>
 
-      <style jsx global>{`
+      <style>{`
         .course-content h1,
         .course-content h2,
         .course-content h3,

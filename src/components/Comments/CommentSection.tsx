@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageCircle, Send, Reply, Trash2, Edit3, X } from 'lucide-react';
-import { supabase } from '../../lib/supabaseConnection';
+import { getSupabase } from '../../lib/supabaseConnection';
 import { useAuth } from '../Auth/AuthProvider';
 
 interface Comment {
@@ -52,6 +52,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ blogId, courseId, isOpe
       console.log('Fetching comments for:', { blogId, courseId });
       
       // First, fetch top-level comments (no parent_id)
+      const supabase = await getSupabase();
       let query = supabase
         .from('comments')
         .select(`
@@ -88,6 +89,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ blogId, courseId, isOpe
       const commentsWithReplies = await Promise.all(
         topLevelComments.map(async (comment) => {
           try {
+            const supabase = await getSupabase();
             const { data: replies, error: repliesError } = await supabase
               .from('comments')
               .select(`
@@ -129,6 +131,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ blogId, courseId, isOpe
 
     setLoading(true);
     try {
+      const supabase = await getSupabase();
       const commentData = {
         content: newComment.trim(),
         user_id: user.id,
@@ -170,6 +173,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ blogId, courseId, isOpe
 
     setLoading(true);
     try {
+      const supabase = await getSupabase();
       const replyData = {
         content: replyContent.trim(),
         user_id: user.id,
@@ -213,6 +217,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ blogId, courseId, isOpe
 
     setLoading(true);
     try {
+      const supabase = await getSupabase();
       const { error } = await supabase
         .from('comments')
         .update({ 
@@ -238,6 +243,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ blogId, courseId, isOpe
     if (!window.confirm('Are you sure you want to delete this comment?')) return;
 
     try {
+      const supabase = await getSupabase();
       const { error } = await supabase
         .from('comments')
         .delete()

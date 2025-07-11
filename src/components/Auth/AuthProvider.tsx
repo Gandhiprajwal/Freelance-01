@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
-import { supabase } from '../../lib/supabaseConnection';
+import { getSupabase } from '../../lib/supabaseConnection';
 
 interface UserProfile {
   id: string;
@@ -97,6 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = async (userId: string, retries = 3): Promise<UserProfile | null> => {
     try {
+      const supabase = await getSupabase();
       const { data, error } = await supabase
         .from('user_profiles')
         .select('*')
@@ -106,6 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         if (error.code === 'PGRST116') {
           // Profile doesn't exist, create one
+          const supabase = await getSupabase();
           const { data: userData } = await supabase.auth.getUser();
           if (userData.user) {
             const newProfile = {
@@ -115,6 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: 'user' as const
             };
 
+            const supabase = await getSupabase();
             const { data: createdProfile, error: createError } = await supabase
               .from('user_profiles')
               .insert([newProfile])
@@ -182,41 +185,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // Get current session with timeout
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session fetch timeout')), 15000)
-        );
-
-        const { data: { session }, error } = await Promise.race([
-          sessionPromise,
-          timeoutPromise
-        ]) as any;
-        
-        if (error) {
-          console.error('Auth error:', error);
-          // Don't set auth error for timeouts, just log them
-          if (!error.message?.includes('timeout')) {
-            setAuthError('Authentication service temporarily unavailable. Please try again later.');
-          }
-        } else if (session?.user) {
-          if (mounted) {
-            setUser(session.user);
-            // Fetch fresh profile data with timeout
-            const profilePromise = fetchUserProfile(session.user.id);
-            const profileTimeoutPromise = new Promise((resolve) => 
-              setTimeout(() => resolve(null), 10000)
-            );
-            
-            await Promise.race([profilePromise, profileTimeoutPromise]);
-          }
-        } else {
-          // No session, clear cached data
-          if (mounted) {
-            setUser(null);
-            setProfile(null);
-            cacheProfile(null);
-          }
-        }
+        getSupabase().then(supabase => {
+          supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session?.user) {
+              if (mounted) {
+                setUser(session.user);
+                // Fetch fresh profile data with timeout
+                const profilePromise = fetchUserProfile(session.user.id);
+                const profileTimeoutPromise = new Promise((resolve) => 
+                  setTimeout(() => resolve(null), 10000)
+                );
+                
+                Promise.race([profilePromise, profileTimeoutPromise]).then(profile => {
+                  if (mounted) {
+                    setProfile(profile || null);
+                  }
+                });
+              }
+            } else {
+              // No session, clear cached data
+              if (mounted) {
+                setUser(null);
+                setProfile(null);
+                cacheProfile(null);
+              }
+            }
+          });
+        });
       } catch (error) {
         if (mounted) {
           console.error('Auth initialization error:', error);
@@ -236,52 +231,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initializeAuth();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!mounted) return;
+    getSupabase().then(supabase => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          if (!mounted) return;
 
-        try {
-          setAuthError(null);
-          
-          if (event === 'SIGNED_OUT') {
-            // Handle sign out
-            setUser(null);
-            setProfile(null);
-            clearAuthData();
-          } else if (session?.user) {
-            setUser(session.user);
-            // Fetch profile for the authenticated user
-            await fetchUserProfile(session.user.id);
-          } else {
-            // User signed out or session expired
-            setUser(null);
-            setProfile(null);
-            cacheProfile(null);
-          }
-        } catch (error) {
-          if (mounted) {
-            setAuthError('Authentication error occurred.');
-            console.error('Auth state change error:', error);
-          }
-        } finally {
-          if (mounted) {
-            setLoading(false);
+          try {
+            setAuthError(null);
+            
+            if (event === 'SIGNED_OUT') {
+              // Handle sign out
+              setUser(null);
+              setProfile(null);
+              clearAuthData();
+            } else if (session?.user) {
+              setUser(session.user);
+              // Fetch profile for the authenticated user
+              await fetchUserProfile(session.user.id);
+            } else {
+              // User signed out or session expired
+              setUser(null);
+              setProfile(null);
+              cacheProfile(null);
+            }
+          } catch (error) {
+            if (mounted) {
+              setAuthError('Authentication error occurred.');
+              console.error('Auth state change error:', error);
+            }
+          } finally {
+            if (mounted) {
+              setLoading(false);
+            }
           }
         }
-      }
-    );
+      );
 
-    return () => {
-      mounted = false;
-      clearTimeout(initializationTimeout);
-      subscription.unsubscribe();
-    };
+      return () => {
+        mounted = false;
+        clearTimeout(initializationTimeout);
+        subscription.unsubscribe();
+      };
+    });
   }, []);
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
     if (!user || !profile) return;
 
     try {
+      const supabase = await getSupabase();
       const updatedData = { ...updates, updated_at: new Date().toISOString() };
       const { data, error } = await supabase
         .from('user_profiles')
@@ -311,6 +309,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clearAuthData();
       
       // Sign out from Supabase
+      const supabase = await getSupabase();
       await supabase.auth.signOut();
       
       // Small delay to ensure cleanup is complete
