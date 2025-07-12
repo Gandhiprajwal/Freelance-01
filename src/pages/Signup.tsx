@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Settings, ArrowRight, User, AlertCircle, Wifi, WifiOff, Key, Shield, UserCheck } from 'lucide-react';
-import { getSupabase } from '../lib/supabaseConnection';
+import { getSupabaseConnection } from '../lib/supabaseConnection';
 import { useApp } from '../context/AppContext';
+import { siteConfig } from '../config/siteConfig';
 
 const Signup: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -24,88 +25,48 @@ const Signup: React.FC = () => {
   const navigate = useNavigate();
   const { refreshData } = useApp();
 
-  // Admin key for creating admin accounts
-  const ADMIN_SECRET_KEY = 'ROBOSTAAN_ADMIN_2024';
-
   useEffect(() => {
-    // Check connection status
+    // Check connection status using the new connection manager
     const checkConnection = async () => {
       try {
-        const supabase = await getSupabase();
-        const { data, error } = await supabase.from('blogs').select('id').limit(1);
-        if (error) {
-          setConnectionStatus('error');
-        } else {
-          setConnectionStatus('connected');
-        }
+        const connection = getSupabaseConnection();
+        await connection.executeWithRetry(async (client) => {
+          const { data, error } = await client.from('blogs').select('id').limit(1);
+          if (error) {
+            throw error;
+          }
+          return data;
+        });
+        setConnectionStatus('connected');
       } catch (err) {
         setConnectionStatus('error');
       }
     };
 
     checkConnection();
-
-    // Check if user is already logged in
-    const checkUser = async () => {
-      try {
-        const supabase = await getSupabase();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          navigate('/');
-        }
-      } catch (err) {
-        console.error('Error checking user:', err);
-      }
-    };
-    
-    if (connectionStatus === 'connected') {
-      checkUser();
-    }
-  }, [navigate, connectionStatus]);
-
-  const validateForm = () => {
-    if (!formData.fullName.trim()) {
-      setError('Full name is required');
-      return false;
-    }
-    if (!formData.email.trim()) {
-      setError('Email is required');
-      return false;
-    }
-    if (!formData.password) {
-      setError('Password is required');
-      return false;
-    }
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long');
-      return false;
-    }
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return false;
-    }
-    if (accountType === 'admin') {
-      if (!formData.adminKey.trim()) {
-        setError('Admin key is required for admin accounts');
-        return false;
-      }
-      if (formData.adminKey !== ADMIN_SECRET_KEY) {
-        setError('Invalid admin key. Please contact the system administrator.');
-        return false;
-      }
-    }
-    return true;
-  };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (connectionStatus === 'error') {
-      setError('Authentication service is currently unavailable. Please try again later.');
+      setError('Registration service is currently unavailable. Please try again later.');
       return;
     }
 
-    if (!validateForm()) {
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    // Validate password requirements
+    if (formData.password.length < siteConfig.auth.passwordRequirements.minLength) {
+      setError(`Password must be at least ${siteConfig.auth.passwordRequirements.minLength} characters long.`);
+      return;
+    }
+
+    if (accountType === 'admin' && formData.adminKey !== siteConfig.auth.adminKey) {
+      setError('Invalid admin key');
       return;
     }
 
@@ -113,63 +74,54 @@ const Signup: React.FC = () => {
     setError(null);
 
     try {
-      // Sign up the user
-      const supabase = await getSupabase();
-      const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            full_name: formData.fullName,
-            account_type: accountType
+      const connection = getSupabaseConnection();
+      const { data, error } = await connection.executeWithRetry(async (client) => {
+        return await client.auth.signUp({
+          email: formData.email,
+          password: formData.password,
+          options: {
+            data: {
+              full_name: formData.fullName,
+              role: accountType
+            }
           }
-        }
+        });
       });
 
       if (error) {
         if (error.message.includes('User already registered')) {
           setError('An account with this email already exists. Please sign in instead.');
-        } else if (error.message.includes('Invalid email')) {
-          setError('Please enter a valid email address.');
         } else if (error.message.includes('Password should be at least')) {
-          setError('Password should be at least 6 characters long.');
+          setError(`Password must be at least ${siteConfig.auth.passwordRequirements.minLength} characters long.`);
         } else {
-          setError('Failed to create account. Please try again.');
+          setError('Registration failed. Please try again later.');
         }
         return;
       }
 
       if (data.user) {
-        // Create user profile with appropriate role
-        const userRole = (accountType === 'admin' || formData.adminKey.trim() === ADMIN_SECRET_KEY)
-          ? 'admin'
-          : 'user';
-        
-        const supabase = await getSupabase();
-        const { error: profileError } = await supabase
-          .from('user_profiles')
-          .upsert([
-            {
-              user_id: data.user.id,
-              email: data.user.email,
+        // Create user profile using the connection manager
+        await connection.executeWithRetry(async (client) => {
+          const { error: profileError } = await client
+            .from('user_profiles')
+            .insert([{
+              user_id: data.user!.id,
+              email: formData.email,
               full_name: formData.fullName,
-              role: userRole
-            }
-          ], { onConflict: 'user_id' });
-        if (profileError) {
-          console.error('Profile creation/upsert error:', profileError);
-        }
+              role: accountType
+            }]);
 
-        setSuccess(true);
+          if (profileError) console.error('Profile error:', profileError);
+          return profileError;
+        });
         
-        // If email confirmation is disabled, sign in automatically
-        if (data.session) {
-          await refreshData();
-          setTimeout(() => navigate('/'), 2000);
-        } else {
-          // Show success message for email confirmation
-          setTimeout(() => navigate('/login'), 3000);
-        }
+        setSuccess(true);
+        await refreshData();
+        
+        // Auto-login after successful registration
+        setTimeout(() => {
+          navigate('/');
+        }, 2000);
       }
     } catch (error: any) {
       setError('Connection error. Please check your internet connection and try again.');
@@ -179,358 +131,296 @@ const Signup: React.FC = () => {
     }
   };
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+  };
+
   if (success) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-orange-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 max-w-md w-full text-center"
+          className="max-w-md w-full text-center"
         >
           <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2 }}
-              className="text-white text-2xl font-bold"
-            >
-              ✓
-            </motion.div>
+            <UserCheck className="w-8 h-8 text-white" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-            {accountType === 'admin' ? 'Admin Account Created!' : 'Account Created Successfully!'}
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+            Account Created Successfully!
           </h2>
-          <p className="text-gray-600 dark:text-gray-300 mb-6">
-            {accountType === 'admin' 
-              ? 'Welcome to ROBOSTAAN! You now have admin privileges to manage content.'
-              : 'Welcome to ROBOSTAAN! You can now start exploring our courses and blogs.'
-            }
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
+            Welcome to {siteConfig.name}! You're being redirected to the dashboard.
           </p>
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500 mx-auto"></div>
-          <p className="text-sm text-gray-500 mt-2">Redirecting...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
         </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-orange-900 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
-        {/* Logo */}
+    <div className="min-h-screen bg-white dark:bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-center mb-8"
+          className="text-center"
         >
-          <Link to="/" className="inline-flex items-center space-x-2">
+          <div className="flex justify-center">
             <motion.div
               whileHover={{ rotate: 360 }}
               transition={{ duration: 0.5 }}
-              className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center"
+              className="w-16 h-16 bg-orange-500 rounded-full flex items-center justify-center"
             >
-              <Settings className="w-7 h-7 text-white" />
+              <Settings className="w-8 h-8 text-white" />
             </motion.div>
-            <div className="flex flex-col">
-              <span className="text-2xl font-bold text-white">ROBOSTAAN</span>
-              <span className="text-sm text-orange-500">An Ageless Adventure</span>
-            </div>
-          </Link>
+          </div>
+          <h2 className="mt-6 text-3xl font-bold text-gray-900 dark:text-white">
+            Join {siteConfig.name}
+          </h2>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+            Create your account and start your robotics journey
+          </p>
         </motion.div>
 
         {/* Connection Status */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mb-4"
-        >
-          <div className={`flex items-center justify-center space-x-2 p-3 rounded-lg ${
-            connectionStatus === 'connected' 
-              ? 'bg-green-100 text-green-800' 
-              : connectionStatus === 'error'
-              ? 'bg-red-100 text-red-800'
-              : 'bg-yellow-100 text-yellow-800'
-          }`}>
-            {connectionStatus === 'connected' ? (
-              <>
-                <Wifi className="w-4 h-4" />
-                <span className="text-sm">Connected to authentication service</span>
-              </>
-            ) : connectionStatus === 'error' ? (
-              <>
-                <WifiOff className="w-4 h-4" />
-                <span className="text-sm">Authentication service temporarily unavailable</span>
-              </>
-            ) : (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-                <span className="text-sm">Checking connection...</span>
-              </>
-            )}
-          </div>
-        </motion.div>
+        {connectionStatus === 'checking' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex items-center justify-center space-x-2 text-orange-600 dark:text-orange-400"
+          >
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-600"></div>
+            <span className="text-sm">Connecting to {siteConfig.name}...</span>
+          </motion.div>
+        )}
 
-        {/* Signup Form */}
+        {connectionStatus === 'error' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex items-center justify-center space-x-2 text-red-600 dark:text-red-400"
+          >
+            <WifiOff className="w-4 h-4" />
+            <span className="text-sm">Connection failed. Please check your internet.</span>
+          </motion.div>
+        )}
+
+        {/* Account Type Selection */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
-          className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8"
+          transition={{ duration: 0.6, delay: 0.1 }}
+          className="flex space-x-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg"
         >
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-              Create Account
-            </h2>
-            <p className="text-gray-600 dark:text-gray-300">
-              Join the robotics community
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={() => setAccountType('user')}
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              accountType === 'user'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <User className="w-4 h-4 inline mr-2" />
+            User
+          </button>
+          <button
+            type="button"
+            onClick={() => setAccountType('admin')}
+            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+              accountType === 'admin'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <Shield className="w-4 h-4 inline mr-2" />
+            Admin
+          </button>
+        </motion.div>
 
-          {/* Account Type Selection */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Account Type
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                type="button"
-                onClick={() => setAccountType('user')}
-                className={`p-4 rounded-lg border-2 transition-all ${
-                  accountType === 'user'
-                    ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
-                    : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
-                }`}
-              >
-                <UserCheck className={`w-6 h-6 mx-auto mb-2 ${
-                  accountType === 'user' ? 'text-orange-500' : 'text-gray-400'
-                }`} />
-                <div className="text-sm font-medium text-gray-900 dark:text-white">User</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">Regular account</div>
-              </motion.button>
-
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                type="button"
-                onClick={() => setAccountType('admin')}
-                className={`p-4 rounded-lg border-2 transition-all ${
-                  accountType === 'admin'
-                    ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
-                    : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
-                }`}
-              >
-                <Shield className={`w-6 h-6 mx-auto mb-2 ${
-                  accountType === 'admin' ? 'text-orange-500' : 'text-gray-400'
-                }`} />
-                <div className="text-sm font-medium text-gray-900 dark:text-white">Admin</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">Requires key</div>
-              </motion.button>
+        {/* Signup Form */}
+        <motion.form
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="mt-8 space-y-6"
+          onSubmit={handleSubmit}
+        >
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Full Name
+              </label>
+              <div className="mt-1 relative">
+                <input
+                  id="fullName"
+                  name="fullName"
+                  type="text"
+                  required
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  className="appearance-none relative block w-full px-3 py-2 pl-10 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-gray-800"
+                  placeholder="Enter your full name"
+                />
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              </div>
             </div>
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Email Address
+              </label>
+              <div className="mt-1 relative">
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={formData.email}
+                  onChange={handleChange}
+                  className="appearance-none relative block w-full px-3 py-2 pl-10 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-gray-800"
+                  placeholder="Enter your email"
+                />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Password
+              </label>
+              <div className="mt-1 relative">
+                <input
+                  id="password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  required
+                  value={formData.password}
+                  onChange={handleChange}
+                  className="appearance-none relative block w-full px-3 py-2 pl-10 pr-10 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-gray-800"
+                  placeholder="Create a password"
+                />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Minimum {siteConfig.auth.passwordRequirements.minLength} characters
+              </p>
+            </div>
+
+            <div>
+              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Confirm Password
+              </label>
+              <div className="mt-1 relative">
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  required
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  className="appearance-none relative block w-full px-3 py-2 pl-10 pr-10 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-gray-800"
+                  placeholder="Confirm your password"
+                />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {accountType === 'admin' && (
+              <div>
+                <label htmlFor="adminKey" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Admin Key
+                </label>
+                <div className="mt-1 relative">
+                  <input
+                    id="adminKey"
+                    name="adminKey"
+                    type={showAdminKey ? 'text' : 'password'}
+                    required
+                    value={formData.adminKey}
+                    onChange={handleChange}
+                    className="appearance-none relative block w-full px-3 py-2 pl-10 pr-10 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-gray-800"
+                    placeholder="Enter admin key"
+                  />
+                  <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminKey(!showAdminKey)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    {showAdminKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Contact {siteConfig.contact.email} for the admin key
+                </p>
+              </div>
+            )}
           </div>
 
           {error && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg flex items-center space-x-2"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-center space-x-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400"
             >
               <AlertCircle className="w-4 h-4" />
               <span className="text-sm">{error}</span>
             </motion.div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Full Name
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  value={formData.fullName}
-                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="Enter your full name"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="Enter your email"
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Admin Key Field */}
-            {accountType === 'admin' && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
-              >
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Admin Key
-                </label>
-                <div className="relative">
-                  <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    type={showAdminKey ? 'text' : 'password'}
-                    value={formData.adminKey}
-                    onChange={(e) => setFormData({ ...formData, adminKey: e.target.value })}
-                    className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    placeholder="Enter admin key"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowAdminKey(!showAdminKey)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    {showAdminKey ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Contact the system administrator for the admin key
-                </p>
-              </motion.div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="Enter your password"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Confirm Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="Confirm your password"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-            </div>
-
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              type="submit"
-              disabled={loading || connectionStatus === 'error'}
-              className={`w-full flex items-center justify-center space-x-2 px-6 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                accountType === 'admin'
-                  ? 'bg-purple-500 hover:bg-purple-600 text-white'
-                  : 'bg-orange-500 hover:bg-orange-600 text-white'
-              }`}
-            >
-              {loading ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-              ) : (
-                <>
-                  {accountType === 'admin' ? <Shield className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-                  <span>Create {accountType === 'admin' ? 'Admin' : 'User'} Account</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </motion.button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <Link
-              to="/login"
-              className="text-orange-500 hover:text-orange-600 transition-colors"
-            >
-              Already have an account? Sign in
-            </Link>
-          </div>
-
-          {/* Admin Key Info */}
-          {accountType === 'admin' && (
-            <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
-              <div className="flex items-center space-x-2 text-purple-700 dark:text-purple-300">
-                <Shield className="w-4 h-4" />
-                <span className="text-sm font-medium">Admin Account</span>
-              </div>
-              <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                Admin accounts have full access to manage content, users, and system settings. 
-                The admin key is required for security purposes.
-              </p>
-            </div>
-          )}
-
-          {/* Terms and Privacy */}
-          <div className="mt-6 text-center text-xs text-gray-500 dark:text-gray-400">
-            By creating an account, you agree to our{' '}
-            <Link to="/terms" className="text-orange-500 hover:text-orange-600">
-              Terms of Service
-            </Link>{' '}
-            and{' '}
-            <Link to="/privacy" className="text-orange-500 hover:text-orange-600">
-              Privacy Policy
-            </Link>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          className="text-center mt-6"
-        >
-          <Link
-            to="/"
-            className="text-gray-300 hover:text-white transition-colors"
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            type="submit"
+            disabled={loading || connectionStatus === 'error'}
+            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-orange-500 hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            ← Back to Home
-          </Link>
-        </motion.div>
+            {loading ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            ) : (
+              <>
+                <ArrowRight className="w-4 h-4 mr-2" />
+                Create {accountType === 'admin' ? 'Admin' : 'User'} Account
+              </>
+            )}
+          </motion.button>
+
+          <div className="text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Already have an account?{' '}
+              <Link
+                to="/login"
+                className="font-medium text-orange-500 hover:text-orange-400 transition-colors"
+              >
+                Sign in here
+              </Link>
+            </p>
+          </div>
+        </motion.form>
       </div>
     </div>
   );

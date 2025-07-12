@@ -1,150 +1,438 @@
-import { createClient, SupabaseClient, AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, AuthChangeEvent, Session, RealtimeChannel } from '@supabase/supabase-js';
+
+// Types for better type safety
+interface ConnectionConfig {
+  maxRetries: number;
+  retryDelay: number;
+  healthCheckInterval: number;
+  connectionTimeout: number;
+  maxReconnectAttempts: number;
+  visibilityCheckInterval: number;
+  heartbeatInterval: number;
+  reconnectBackoffMultiplier: number;
+}
+
+interface ChannelSubscription {
+  channel: RealtimeChannel;
+  callback: (payload: any) => void;
+  table: string;
+  lastActivity: number;
+  isActive: boolean;
+}
 
 class SupabaseConnection {
   private client: SupabaseClient | null = null;
   private connectionPromise: Promise<SupabaseClient> | null = null;
-  private connectionAttempts = 0;
   private isConnecting = false;
   private healthCheckTimer: NodeJS.Timeout | null = null;
+  private visibilityTimer: NodeJS.Timeout | null = null;
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private reconnectAttempts = 0;
+  private isPageVisible = true;
+  private lastSuccessfulOperation = Date.now();
+  private consecutiveFailures = 0;
+  private maxConsecutiveFailures = 3;
 
-  private readonly maxRetries = 3;
-  private readonly retryDelay = 1000;
-  private readonly healthCheckInterval = 30_000;
+  // Configuration
+  private readonly config: ConnectionConfig = {
+    maxRetries: 5,
+    retryDelay: 500, // Reduced from 1000ms
+    healthCheckInterval: 15_000, // Reduced from 30s to 15s
+    connectionTimeout: 8_000, // Reduced from 10s to 8s
+    maxReconnectAttempts: 10, // Increased from 5 to 10
+    visibilityCheckInterval: 3_000, // Reduced from 5s to 3s
+    heartbeatInterval: 10_000, // New: 10 second heartbeat
+    reconnectBackoffMultiplier: 1.5 // Exponential backoff
+  };
 
+  // Environment variables
   private readonly supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
   private readonly supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY!;
-  private readonly localStorageAuthKeys = [
-    'sb-auth-token',
-    'supabase.auth.token',
-    'user_profile'
-  ];
 
-  // 🔄 Realtime channels map
-  private activeChannels: Map<string, ReturnType<SupabaseClient['channel']>> = new Map();
+  // Secure token storage keys
+  private readonly secureStorageKeys = {
+    authToken: 'sb-auth-token',
+    refreshToken: 'sb-refresh-token',
+    userProfile: 'user_profile',
+    sessionData: 'session_data'
+  };
+
+  // Active realtime channels with metadata
+  private activeChannels: Map<string, ChannelSubscription> = new Map();
+
+  // Connection state
+  private connectionState: 'connected' | 'connecting' | 'disconnected' | 'error' = 'disconnected';
+  private lastHealthCheck = 0;
+  private lastActivity = Date.now();
 
   constructor() {
+    this.validateEnvironment();
     this.initializeConnection();
-    this.setupVisibilityReconnect();
+    this.setupVisibilityHandling();
+    this.setupCleanup();
+    this.startHeartbeat();
   }
 
-  private initializeConnection() {
+  private validateEnvironment(): void {
     if (!this.supabaseUrl || !this.supabaseAnonKey) {
-      throw new Error('[Supabase] Missing environment variables');
+      throw new Error('[Supabase] Missing required environment variables: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+    }
     }
 
+  private initializeConnection(): void {
+    try {
     this.client = createClient(this.supabaseUrl, this.supabaseAnonKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true
+          detectSessionInUrl: true,
+          storage: this.createSecureStorage(),
+          storageKey: 'robostaan-auth'
       },
       realtime: {
-        params: { eventsPerSecond: 10 }
+          params: { 
+            eventsPerSecond: 10,
+            heartbeatIntervalMs: 15000, // Reduced from 30s
+            reconnectAfterMs: (tries: number) => Math.min(tries * 500, 5000) // Faster reconnection
+          }
       },
       global: {
         headers: {
-          'x-application-name': 'robostaan'
+            'x-application-name': 'robostaan',
+            'x-client-info': 'robostaan-web'
         }
       }
     });
 
-    this.monitorAuthChanges();
-    this.startHealthCheck();
+      this.setupAuthMonitoring();
+      this.startHealthCheck();
+      this.connectionState = 'connected';
+      
+      console.info('[Supabase] Connection initialized successfully');
+    } catch (error) {
+      console.error('[Supabase] Failed to initialize connection:', error);
+      this.connectionState = 'error';
+      this.scheduleReconnection();
+    }
   }
 
-  private monitorAuthChanges() {
-    this.client?.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
+  private createSecureStorage() {
+    return {
+      getItem: (key: string): string | null => {
+        try {
+          // Use sessionStorage for sensitive data (cleared when tab closes)
+          return sessionStorage.getItem(key);
+        } catch (error) {
+          console.warn('[Supabase] Failed to get item from storage:', error);
+          return null;
+        }
+      },
+      setItem: (key: string, value: string): void => {
+        try {
+          sessionStorage.setItem(key, value);
+        } catch (error) {
+          console.warn('[Supabase] Failed to set item in storage:', error);
+        }
+      },
+      removeItem: (key: string): void => {
+        try {
+          sessionStorage.removeItem(key);
+          localStorage.removeItem(key); // Also remove from localStorage for cleanup
+        } catch (error) {
+          console.warn('[Supabase] Failed to remove item from storage:', error);
+        }
+      }
+    };
+  }
+
+  private setupAuthMonitoring(): void {
+    if (!this.client) return;
+
+    this.client.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
       console.log('[Supabase] Auth event:', event);
 
       switch (event) {
-        case 'SIGNED_OUT':
-          this.clearAuthData();
+        case 'SIGNED_IN':
+          this.lastActivity = Date.now();
+          this.lastSuccessfulOperation = Date.now();
+          this.reconnectAttempts = 0;
+          this.consecutiveFailures = 0;
           break;
 
-        case 'TOKEN_REFRESH_FAILED':
-          console.warn('[Supabase] Token refresh failed. Logging out.');
-          await this.client?.auth.signOut();
-          this.clearAuthData();
+        case 'SIGNED_OUT':
+          this.clearSecureData();
+          this.unsubscribeAllChannels();
           break;
 
         case 'TOKEN_REFRESHED':
-          console.info('[Supabase] Token refreshed');
+          console.info('[Supabase] Token refreshed successfully');
+          this.lastActivity = Date.now();
+          this.lastSuccessfulOperation = Date.now();
+          this.consecutiveFailures = 0;
           break;
 
-        default:
+        case 'TOKEN_REFRESH_FAILED' as any:
+          console.warn('[Supabase] Token refresh failed, signing out');
+          await this.client?.auth.signOut();
+          this.clearSecureData();
+          break;
+
+        case 'USER_UPDATED':
+          this.lastActivity = Date.now();
+          this.lastSuccessfulOperation = Date.now();
           break;
       }
     });
   }
 
-  private startHealthCheck() {
-    if (this.healthCheckTimer) clearInterval(this.healthCheckTimer);
+  private setupVisibilityHandling(): void {
+    // Handle page visibility changes
+    document.addEventListener('visibilitychange', () => {
+      this.isPageVisible = document.visibilityState === 'visible';
+      
+      if (this.isPageVisible) {
+        this.onPageVisible();
+      } else {
+        this.onPageHidden();
+      }
+    });
 
-    this.healthCheckTimer = setInterval(() => {
-      this.healthCheck();
-    }, this.healthCheckInterval);
+    // Periodic visibility check
+    this.visibilityTimer = setInterval(() => {
+      if (this.isPageVisible && this.connectionState === 'connected') {
+        this.checkSessionValidity();
+      }
+    }, this.config.visibilityCheckInterval);
   }
 
-  private async healthCheck() {
+  private onPageVisible(): void {
+    console.log('[Supabase] Page became visible, checking connection...');
+    this.lastActivity = Date.now();
+    
+    // Resume health checks
+    this.startHealthCheck();
+    
+    // Check if connection is healthy
+    if (this.connectionState !== 'connected') {
+      console.log('[Supabase] Connection not healthy, attempting reconnect...');
+      this.scheduleReconnection();
+    }
+  }
+
+  private onPageHidden(): void {
+    console.log('[Supabase] Page hidden, pausing health checks');
+    this.stopHealthCheck();
+  }
+
+  private async checkSessionValidity(): Promise<void> {
     if (!this.client) return;
 
     try {
-      const { error } = await this.client.from('blogs').select('id').limit(1);
-      if (error?.message?.toLowerCase().includes('connection')) {
-        console.warn('[Supabase] Connection issue. Reconnecting...');
-        await this.reconnect();
+      const { data: { session } } = await this.client.auth.getSession();
+      if (session && session.expires_at) {
+        const expiresAt = new Date(session.expires_at * 1000);
+        const now = new Date();
+        
+        if (expiresAt.getTime() - now.getTime() < 5 * 60 * 1000) { // 5 minutes
+          console.log('[Supabase] Session expiring soon, refreshing...');
+          await this.client.auth.refreshSession();
+        }
       }
-    } catch (err) {
-      console.warn('[Supabase] Health check failed:', err);
+    } catch (error) {
+      console.warn('[Supabase] Session validation failed:', error);
     }
   }
 
-  private setupVisibilityReconnect() {
-    document.addEventListener('visibilitychange', async () => {
-      if (document.visibilityState === 'visible') {
-        console.log('[Supabase] Tab visible. Checking session...');
-        const { data, error } = await this.client?.auth.getSession() ?? {};
-        if (!data?.session || error) {
-          console.warn('[Supabase] No active session. Reconnecting...');
-          await this.reconnect();
-        }
-      }
-    });
+  private startHealthCheck(): void {
+    if (this.healthCheckTimer) return;
+    
+    this.healthCheckTimer = setInterval(() => {
+      this.performHealthCheck();
+    }, this.config.healthCheckInterval);
   }
 
-  private clearAuthData() {
-    [...Object.keys(localStorage), ...Object.keys(sessionStorage)].forEach(key => {
-      if (key.startsWith('sb-') || key.includes('auth') || this.localStorageAuthKeys.includes(key)) {
-        localStorage.removeItem(key);
-        sessionStorage.removeItem(key);
+  private stopHealthCheck(): void {
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer);
+      this.healthCheckTimer = null;
+    }
+  }
+
+  private startHeartbeat(): void {
+    if (this.heartbeatTimer) return;
+    
+    this.heartbeatTimer = setInterval(() => {
+      this.performHeartbeat();
+    }, this.config.heartbeatInterval);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  private async performHeartbeat(): Promise<void> {
+    if (!this.client || !this.isPageVisible) return;
+
+    try {
+      // Lightweight ping to keep connection alive
+      const { error } = await this.client!
+        .from('blogs')
+        .select('id')
+        .limit(1)
+        .abortSignal(AbortSignal.timeout(3000)); // 3 second timeout for heartbeat
+
+      if (!error) {
+        this.lastSuccessfulOperation = Date.now();
+        this.consecutiveFailures = 0;
       }
-    });
+    } catch (error) {
+      // Heartbeat failures don't trigger immediate reconnection
+      console.debug('[Supabase] Heartbeat failed:', error);
+    }
+  }
+
+  private async performHealthCheck(): Promise<void> {
+    if (!this.client || !this.isPageVisible) return;
+
+    try {
+      const startTime = Date.now();
+      
+      // Use a lightweight query for health check
+      const { error } = await this.client!
+        .from('blogs')
+        .select('id')
+        .limit(1)
+        .abortSignal(AbortSignal.timeout(this.config.connectionTimeout));
+
+      const responseTime = Date.now() - startTime;
+      
+      if (error) {
+        this.consecutiveFailures++;
+        console.warn(`[Supabase] Health check failed (${this.consecutiveFailures}/${this.maxConsecutiveFailures}):`, error.message);
+        
+        if (this.isConnectionError(error) || this.consecutiveFailures >= this.maxConsecutiveFailures) {
+          await this.handleConnectionError();
+        }
+      } else {
+        this.lastHealthCheck = Date.now();
+        this.lastSuccessfulOperation = Date.now();
+        this.reconnectAttempts = 0;
+        this.consecutiveFailures = 0;
+        
+        if (responseTime > 3000) {
+          console.warn(`[Supabase] Slow response time: ${responseTime}ms`);
+        }
+      }
+    } catch (error: any) {
+      this.consecutiveFailures++;
+      console.warn(`[Supabase] Health check error (${this.consecutiveFailures}/${this.maxConsecutiveFailures}):`, error);
+      
+      if (error.name === 'TimeoutError' || this.consecutiveFailures >= this.maxConsecutiveFailures) {
+        await this.handleConnectionError();
+      }
+    }
+  }
+
+  private isConnectionError(error: any): boolean {
+    const connectionErrors = [
+      'connection', 'network', 'timeout', 'PGRST301', 'PGRST302',
+      'fetch', 'abort', 'ECONNRESET', 'ENOTFOUND', 'ETIMEDOUT',
+      'ERR_NETWORK', 'ERR_INTERNET_DISCONNECTED', 'ERR_CONNECTION_REFUSED'
+    ];
+    
+    return connectionErrors.some(str => 
+      error?.message?.toLowerCase().includes(str) || 
+      error?.code?.toLowerCase().includes(str) ||
+      error?.name?.toLowerCase().includes(str)
+    );
+  }
+
+  private async handleConnectionError(): Promise<void> {
+    if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
+      console.error('[Supabase] Max reconnection attempts reached');
+      this.connectionState = 'error';
+      return;
+    }
+
+    this.reconnectAttempts++;
+    console.warn(`[Supabase] Attempting reconnect (${this.reconnectAttempts}/${this.config.maxReconnectAttempts})`);
+    
+    await this.reconnect();
+  }
+
+  private scheduleReconnection(): void {
+    if (this.connectionState === 'connecting') return;
+    
+    setTimeout(async () => {
+      if (this.connectionState !== 'connected') {
+        console.log('[Supabase] Scheduled reconnection triggered');
+        await this.reconnect();
+      }
+    }, this.config.retryDelay);
   }
 
   private async connect(): Promise<SupabaseClient> {
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+    if (this.client && this.connectionState === 'connected') return this.client;
+
+    for (let attempt = 1; attempt <= this.config.maxRetries; attempt++) {
       try {
+        this.connectionState = 'connecting';
+        
+        // Create new client if needed
+        if (!this.client) {
         this.initializeConnection();
-        if (!this.client) throw new Error('[Supabase] Client not initialized');
+        }
+        
+        if (!this.client) {
+          throw new Error('Client not initialized');
+        }
 
-        const { error } = await this.client.from('blogs').select('id').limit(1);
-        if (error && !error.message.includes('relation')) throw error;
+        // Test connection with timeout
+        const client = this.client;
+        const { error } = await client
+          .from('blogs')
+          .select('id')
+          .limit(1)
+          .abortSignal(AbortSignal.timeout(this.config.connectionTimeout));
 
-        console.info('[Supabase] Connected');
-        this.connectionAttempts = 0;
+        if (error && !error.message.includes('relation')) {
+          throw error;
+        }
+
+        this.connectionState = 'connected';
+        this.reconnectAttempts = 0;
+        this.consecutiveFailures = 0;
+        this.lastSuccessfulOperation = Date.now();
+        console.info('[Supabase] Connection established successfully');
+        
         return this.client;
-      } catch (error) {
-        console.error(`[Supabase] Connect attempt ${attempt} failed`, error);
-        await this.delay(this.retryDelay * attempt);
+      } catch (error: any) {
+        console.error(`[Supabase] Connection attempt ${attempt} failed:`, error);
+        
+        if (attempt < this.config.maxRetries) {
+          const backoffDelay = this.config.retryDelay * Math.pow(this.config.reconnectBackoffMultiplier, attempt - 1);
+          await this.delay(backoffDelay);
+        } else {
+          this.connectionState = 'error';
+          throw new Error(`Failed to connect after ${this.config.maxRetries} attempts`);
+        }
       }
     }
 
-    throw new Error('[Supabase] Failed to connect after retries');
+    throw new Error('Connection failed');
   }
 
   public async getClient(): Promise<SupabaseClient> {
-    if (this.client) return this.client;
-    if (this.isConnecting && this.connectionPromise) return this.connectionPromise;
+    if (this.client && this.connectionState === 'connected') {
+      return this.client;
+    }
+
+    if (this.isConnecting && this.connectionPromise) {
+      return this.connectionPromise;
+    }
 
     this.isConnecting = true;
     this.connectionPromise = this.connect();
@@ -159,122 +447,354 @@ class SupabaseConnection {
   }
 
   public async reconnect(): Promise<SupabaseClient> {
+    console.log('[Supabase] Starting reconnection process...');
+    
+    // Clean up existing connection
     this.client = null;
     this.connectionPromise = null;
     this.isConnecting = false;
+    this.connectionState = 'disconnected';
 
+    // Get new client
     const newClient = await this.getClient();
 
-    // Reconnect all active channels
-    const previousChannels = [...this.activeChannels.entries()];
-    this.activeChannels.clear();
-    for (const [channelName, channel] of previousChannels) {
-      console.log(`[Supabase] Reconnecting channel "${channelName}"...`);
-      await this.subscribeToChannel(channelName, channel.callback);
-    }
+    // Reconnect active channels
+    await this.reconnectActiveChannels();
 
     return newClient;
   }
 
   public async executeWithRetry<T>(
     operation: (client: SupabaseClient) => Promise<T>,
-    maxRetries = 2
+    maxRetries = 3, // Increased from 2 to 3
+    timeout = this.config.connectionTimeout
   ): Promise<T> {
     for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
       try {
         const client = await this.getClient();
-        return await operation(client);
-      } catch (error: any) {
-        const retryable = ['connection', 'network', 'timeout', 'PGRST301']
-          .some(str => error?.message?.includes(str) || error?.code === str);
+        
+        // Create abort controller for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-        if (retryable && attempt <= maxRetries) {
-          console.warn(`[Supabase] Retrying operation (attempt ${attempt})`);
+        try {
+          const result = await operation(client);
+          clearTimeout(timeoutId);
+          this.lastSuccessfulOperation = Date.now();
+          this.consecutiveFailures = 0;
+          return result;
+        } catch (error: any) {
+          clearTimeout(timeoutId);
+          throw error;
+        }
+      } catch (error: any) {
+        const isRetryable = this.isRetryableError(error);
+
+        if (isRetryable && attempt <= maxRetries) {
+          console.warn(`[Supabase] Retrying operation (attempt ${attempt}/${maxRetries})`);
           await this.reconnect();
-          await this.delay(this.retryDelay * attempt);
+          const backoffDelay = this.config.retryDelay * Math.pow(this.config.reconnectBackoffMultiplier, attempt - 1);
+          await this.delay(backoffDelay);
         } else {
           throw error;
         }
       }
     }
 
-    throw new Error('[Supabase] Operation failed after all retries');
+    throw new Error('Operation failed after all retries');
   }
 
-  public getConnectionStatus(): 'connected' | 'connecting' | 'disconnected' {
-    if (this.client) return 'connected';
-    if (this.isConnecting) return 'connecting';
-    return 'disconnected';
+  private isRetryableError(error: any): boolean {
+    const retryableErrors = [
+      'connection', 'network', 'timeout', 'PGRST301', 'PGRST302',
+      'fetch', 'abort', 'ECONNRESET', 'ENOTFOUND', 'ETIMEDOUT',
+      'ERR_NETWORK', 'ERR_INTERNET_DISCONNECTED', 'ERR_CONNECTION_REFUSED'
+    ];
+    
+    return retryableErrors.some(str => 
+      error?.message?.toLowerCase().includes(str) || 
+      error?.code?.toLowerCase().includes(str) ||
+      error?.name?.toLowerCase().includes(str)
+    );
   }
 
-  public isConnected(): boolean {
-    return !!this.client;
-  }
-
-  public async getRawClient(): Promise<SupabaseClient> {
-    return this.getClient();
-  }
-
-  private delay(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  // 🔄 ========== REALTIME CHANNEL METHODS ==========
+  // ========== REALTIME CHANNEL MANAGEMENT ==========
 
   public async subscribeToChannel(
     channelName: string,
     onChange: (payload: any) => void,
-    table = 'blogs'
-  ) {
+    table = 'blogs',
+    options: { 
+      events?: string[], 
+      filter?: string,
+      autoReconnect?: boolean 
+    } = {}
+  ): Promise<void> {
+    try {
     const client = await this.getClient();
-
-    if (this.activeChannels.has(channelName)) {
-      console.warn(`[Supabase] Channel "${channelName}" already subscribed`);
-      return;
-    }
 
     const channel = client
       .channel(channelName)
-      .on('postgres_changes', { event: '*', schema: 'public', table }, payload => {
+          .on(
+            'postgres_changes' as any,
+            {
+              event: options.events || '*',
+              schema: 'public',
+              table: table,
+              filter: options.filter
+            },
+            (payload: any) => {
+              this.lastActivity = Date.now();
         onChange(payload);
-      })
-      .subscribe(status => {
-        console.log(`[Supabase] Channel "${channelName}" status: ${status}`);
-        if (status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-          console.warn(`[Supabase] Channel "${channelName}" closed. Will reconnect.`);
-          this.reconnectChannel(channelName, onChange, table);
+            }
+          )
+        .subscribe((status) => {
+          console.log(`[Supabase] Channel ${channelName} status:`, status);
+          
+          if (status === 'SUBSCRIBED') {
+            this.activeChannels.set(channelName, {
+              channel,
+              callback: onChange,
+              table,
+              lastActivity: Date.now(),
+              isActive: true
+            });
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn(`[Supabase] Channel ${channelName} error, will retry...`);
+            this.scheduleChannelReconnect(channelName);
         }
       });
 
-    // Store callback for reconnect
-    (channel as any).callback = onChange;
-    this.activeChannels.set(channelName, channel);
-  }
-
-  private reconnectChannel(
-    channelName: string,
-    onChange: (payload: any) => void,
-    table = 'blogs'
-  ) {
-    this.activeChannels.delete(channelName);
-    setTimeout(() => {
-      this.subscribeToChannel(channelName, onChange, table);
-    }, 2000);
-  }
-
-  public async unsubscribeFromChannel(channelName: string) {
-    const channel = this.activeChannels.get(channelName);
-    if (channel) {
-      await this.client?.removeChannel(channel);
-      this.activeChannels.delete(channelName);
-      console.info(`[Supabase] Unsubscribed from channel "${channelName}"`);
+    } catch (error) {
+      console.error(`[Supabase] Failed to subscribe to channel ${channelName}:`, error);
+      throw error;
     }
   }
+
+  private scheduleChannelReconnect(channelName: string): void {
+    setTimeout(async () => {
+      const subscription = this.activeChannels.get(channelName);
+      if (subscription && subscription.isActive) {
+        try {
+          await this.unsubscribeFromChannel(channelName);
+          await this.subscribeToChannel(
+            channelName,
+            subscription.callback,
+            subscription.table
+          );
+        } catch (error) {
+          console.error(`[Supabase] Failed to reconnect channel ${channelName}:`, error);
+        }
+      }
+    }, this.config.retryDelay);
+  }
+
+  public async unsubscribeFromChannel(channelName: string): Promise<void> {
+    const subscription = this.activeChannels.get(channelName);
+    if (subscription) {
+      try {
+        await subscription.channel.unsubscribe();
+    this.activeChannels.delete(channelName);
+        console.log(`[Supabase] Unsubscribed from channel ${channelName}`);
+      } catch (error) {
+        console.error(`[Supabase] Error unsubscribing from channel ${channelName}:`, error);
+      }
+    }
+  }
+
+  public async unsubscribeAllChannels(): Promise<void> {
+    const unsubscribePromises = Array.from(this.activeChannels.keys()).map(
+      channelName => this.unsubscribeFromChannel(channelName)
+    );
+    
+    await Promise.allSettled(unsubscribePromises);
+    this.activeChannels.clear();
+  }
+
+  private async reconnectActiveChannels(): Promise<void> {
+    const channelsToReconnect = Array.from(this.activeChannels.entries());
+    
+    for (const [channelName, subscription] of channelsToReconnect) {
+      if (subscription.isActive) {
+        try {
+          await this.subscribeToChannel(
+            channelName,
+            subscription.callback,
+            subscription.table
+          );
+        } catch (error) {
+          console.error(`[Supabase] Failed to reconnect channel ${channelName}:`, error);
+        }
+      }
+    }
+  }
+
+  private markChannelsInactive(): void {
+    for (const [channelName, subscription] of this.activeChannels.entries()) {
+      subscription.isActive = false;
+      subscription.lastActivity = Date.now();
+    }
+  }
+
+  private reconnectInactiveChannels(): void {
+    for (const [channelName, subscription] of this.activeChannels.entries()) {
+      if (!subscription.isActive) {
+        subscription.isActive = true;
+        console.log(`[Supabase] Reactivating channel "${channelName}"`);
+      }
+    }
+  }
+
+  // ========== UTILITY METHODS ==========
+
+  public getConnectionStatus(): 'connected' | 'connecting' | 'disconnected' | 'error' {
+    return this.connectionState;
+  }
+
+  public isConnected(): boolean {
+    return this.connectionState === 'connected' && this.client !== null;
+  }
+
+  public getActiveChannelsCount(): number {
+    return this.activeChannels.size;
+  }
+
+  public getLastActivity(): number {
+    return this.lastActivity;
+  }
+
+  public getHealthStatus(): {
+    connectionState: string;
+    lastHealthCheck: number;
+    reconnectAttempts: number;
+    activeChannels: number;
+    isPageVisible: boolean;
+    lastSuccessfulOperation: number;
+    consecutiveFailures: number;
+    uptime: number;
+  } {
+    return {
+      connectionState: this.connectionState,
+      lastHealthCheck: this.lastHealthCheck,
+      reconnectAttempts: this.reconnectAttempts,
+      activeChannels: this.activeChannels.size,
+      isPageVisible: this.isPageVisible,
+      lastSuccessfulOperation: this.lastSuccessfulOperation,
+      consecutiveFailures: this.consecutiveFailures,
+      uptime: Date.now() - this.lastActivity
+    };
+  }
+
+  public async forceReconnect(): Promise<void> {
+    console.log('[Supabase] Force reconnection requested');
+    this.connectionState = 'disconnected';
+    this.reconnectAttempts = 0;
+    this.consecutiveFailures = 0;
+    await this.reconnect();
+  }
+
+  public async checkConnectionHealth(): Promise<boolean> {
+    try {
+      const client = await this.getClient();
+      const { error } = await client
+        .from('blogs')
+        .select('id')
+        .limit(1)
+        .abortSignal(AbortSignal.timeout(5000));
+
+      if (error) {
+        console.warn('[Supabase] Connection health check failed:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.warn('[Supabase] Connection health check error:', error);
+      return false;
+    }
+  }
+
+  private clearSecureData(): void {
+    try {
+      Object.values(this.secureStorageKeys).forEach(key => {
+        sessionStorage.removeItem(key);
+        localStorage.removeItem(key);
+      });
+      console.log('[Supabase] Secure data cleared');
+    } catch (error) {
+      console.warn('[Supabase] Failed to clear secure data:', error);
+    }
+  }
+
+  private setupCleanup(): void {
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      this.unsubscribeAllChannels();
+      this.stopHealthCheck();
+      this.stopHeartbeat();
+    });
+
+    // Cleanup on visibility change
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        this.stopHealthCheck();
+      } else {
+        this.startHealthCheck();
+      }
+    });
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  public cleanup(): void {
+    console.log('[Supabase] Cleaning up connection...');
+    
+    this.unsubscribeAllChannels();
+    this.stopHealthCheck();
+    this.stopHeartbeat();
+    
+    if (this.visibilityTimer) {
+      clearInterval(this.visibilityTimer);
+      this.visibilityTimer = null;
+    }
+    
+    this.client = null;
+    this.connectionPromise = null;
+    this.isConnecting = false;
+    this.connectionState = 'disconnected';
+    
+    console.log('[Supabase] Cleanup completed');
+  }
 }
 
-const supabaseConnection = new SupabaseConnection();
-// Export a function to get the Supabase client (returns a promise)
-export function getSupabase() {
-  return supabaseConnection.getClient();
+// Singleton instance
+let connectionInstance: SupabaseConnection | null = null;
+
+export function getSupabase(): Promise<SupabaseClient> {
+  if (!connectionInstance) {
+    connectionInstance = new SupabaseConnection();
+  }
+  return connectionInstance.getClient();
 }
-export default supabaseConnection;
+
+export function getSupabaseConnection(): SupabaseConnection {
+  if (!connectionInstance) {
+    connectionInstance = new SupabaseConnection();
+  }
+  return connectionInstance;
+}
+
+// Export for debugging and monitoring
+export function getConnectionHealth() {
+  return connectionInstance?.getHealthStatus();
+}
+
+export function forceReconnect() {
+  return connectionInstance?.forceReconnect();
+}
+
+export function checkConnectionHealth() {
+  return connectionInstance?.checkConnectionHealth();
+}

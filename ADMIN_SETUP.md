@@ -38,7 +38,7 @@ Admin accounts have the following privileges:
 ## Demo Admin Account
 
 You can also use the pre-created demo admin account:
-- **Email**: `admin@robostaan.com`
+- **Email**: `admin@robostaan.in`
 - **Password**: `admin123`
 
 ## Changing the Admin Key

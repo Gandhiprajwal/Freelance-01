@@ -1,0 +1,671 @@
+import { SupabaseClient } from '@supabase/supabase-js';
+import { getSupabase, getSupabaseConnection } from './supabaseConnection';
+import { getConnectionPool } from './supabaseConnectionPool';
+
+// Types for better type safety
+export interface Blog {
+  id: string;
+  title: string;
+  content: string;
+  snippet: string;
+  image: string;
+  tags: string[];
+  author: string;
+  featured: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Course {
+  id: string;
+  title: string;
+  description: string;
+  content: string;
+  image: string;
+  duration: string;
+  category: 'Beginner' | 'Intermediate' | 'Advanced';
+  video_url?: string;
+  materials: string[];
+  featured: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserProfile {
+  id: string;
+  user_id: string;
+  email: string;
+  full_name?: string;
+  avatar_url?: string;
+  bio?: string;
+  role: 'user' | 'admin' | 'instructor';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Comment {
+  id: string;
+  user_id: string;
+  blog_id?: string;
+  course_id?: string;
+  content: string;
+  parent_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BlogLike {
+  id: string;
+  user_id: string;
+  blog_id: string;
+  created_at: string;
+}
+
+export interface CourseEnrollment {
+  id: string;
+  user_id: string;
+  course_id: string;
+  enrolled_at: string;
+  progress: number;
+  completed_at?: string;
+}
+
+export interface BlogView {
+  id: string;
+  blog_id: string;
+  viewed_at: string;
+  viewer_ip?: string;
+  viewer_user_agent?: string;
+  user_id?: string;
+  session_id?: string;
+}
+
+// Service class for serverless-optimized data access with connection pooling
+class SupabaseService {
+  private readonly connection = getSupabaseConnection();
+  private readonly connectionPool = getConnectionPool();
+
+  // ========== BLOG OPERATIONS ==========
+
+  async getBlogs(options: {
+    limit?: number;
+    offset?: number;
+    featured?: boolean;
+    tags?: string[];
+    search?: string;
+  } = {}): Promise<{ data: Blog[]; error: any }> {
+    // Use connection pool for high-traffic operations
+    return this.connectionPool.executeWithConnection(async (client: SupabaseClient) => {
+      let query = client.from('blogs').select('*');
+
+      if (options.featured !== undefined) {
+        query = query.eq('featured', options.featured);
+      }
+
+      if (options.tags && options.tags.length > 0) {
+        query = query.overlaps('tags', options.tags);
+      }
+
+      if (options.search) {
+        query = query.or(`title.ilike.%${options.search}%,content.ilike.%${options.search}%`);
+      }
+
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+
+      if (options.offset) {
+        query = query.range(options.offset, options.offset + (options.limit || 10) - 1);
+      }
+
+      query = query.order('created_at', { ascending: false });
+      const { data, error } = await query;
+      return { data: data ?? [], error };
+    });
+  }
+
+  async getBlogById(id: string): Promise<{ data: Blog | null; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('blogs')
+        .select('*')
+        .eq('id', id)
+        .single();
+    });
+  }
+
+  async createBlog(blog: Omit<Blog, 'id' | 'created_at' | 'updated_at'>): Promise<{ data: Blog | null; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('blogs')
+        .insert(blog)
+        .select()
+        .single();
+    });
+  }
+
+  async updateBlog(id: string, updates: Partial<Blog>): Promise<{ data: Blog | null; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('blogs')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+    });
+  }
+
+  async deleteBlog(id: string): Promise<{ error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('blogs')
+        .delete()
+        .eq('id', id);
+    });
+  }
+
+  // ========== COURSE OPERATIONS ==========
+
+  async getCourses(options: {
+    limit?: number;
+    offset?: number;
+    featured?: boolean;
+    category?: string;
+    search?: string;
+  } = {}): Promise<{ data: Course[]; error: any }> {
+    // Use connection pool for high-traffic operations
+    return this.connectionPool.executeWithConnection(async (client: SupabaseClient) => {
+      let query = client.from('courses').select('*');
+
+      if (options.featured !== undefined) {
+        query = query.eq('featured', options.featured);
+      }
+
+      if (options.category) {
+        query = query.eq('category', options.category);
+      }
+
+      if (options.search) {
+        query = query.or(`title.ilike.%${options.search}%,description.ilike.%${options.search}%`);
+      }
+
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+
+      if (options.offset) {
+        query = query.range(options.offset, options.offset + (options.limit || 10) - 1);
+      }
+
+      query = query.order('created_at', { ascending: false });
+      const { data, error } = await query;
+      return { data: data ?? [], error };
+    });
+  }
+
+  async getCourseById(id: string): Promise<{ data: Course | null; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('courses')
+        .select('*')
+        .eq('id', id)
+        .single();
+    });
+  }
+
+  async createCourse(course: Omit<Course, 'id' | 'created_at' | 'updated_at'>): Promise<{ data: Course | null; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('courses')
+        .insert(course)
+        .select()
+        .single();
+    });
+  }
+
+  async updateCourse(id: string, updates: Partial<Course>): Promise<{ data: Course | null; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('courses')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+    });
+  }
+
+  async deleteCourse(id: string): Promise<{ error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('courses')
+        .delete()
+        .eq('id', id);
+    });
+  }
+
+  // ========== USER PROFILE OPERATIONS ==========
+
+  async getUserProfile(userId: string): Promise<{ data: UserProfile | null; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+    });
+  }
+
+  async createUserProfile(profile: Omit<UserProfile, 'id' | 'created_at' | 'updated_at'>): Promise<{ data: UserProfile | null; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('user_profiles')
+        .insert(profile)
+        .select()
+        .single();
+    });
+  }
+
+  async updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<{ data: UserProfile | null; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('user_profiles')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('user_id', userId)
+        .select()
+        .single();
+    });
+  }
+
+  // ========== COMMENT OPERATIONS ==========
+
+  async getComments(options: {
+    blog_id?: string;
+    course_id?: string;
+    parent_id?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<{ data: Comment[]; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      let query = client.from('comments').select('*');
+
+      if (options.blog_id) {
+        query = query.eq('blog_id', options.blog_id);
+      }
+
+      if (options.course_id) {
+        query = query.eq('course_id', options.course_id);
+      }
+
+      if (options.parent_id) {
+        query = query.eq('parent_id', options.parent_id);
+      }
+
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+
+      if (options.offset) {
+        query = query.range(options.offset, options.offset + (options.limit || 10) - 1);
+      }
+
+      query = query.order('created_at', { ascending: true });
+      const { data, error } = await query;
+      return { data: data ?? [], error };
+    });
+  }
+
+  async createComment(comment: Omit<Comment, 'id' | 'created_at' | 'updated_at'>): Promise<{ data: Comment | null; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('comments')
+        .insert(comment)
+        .select()
+        .single();
+    });
+  }
+
+  async updateComment(id: string, updates: Partial<Comment>): Promise<{ data: Comment | null; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('comments')
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+    });
+  }
+
+  async deleteComment(id: string): Promise<{ error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('comments')
+        .delete()
+        .eq('id', id);
+    });
+  }
+
+  // ========== BLOG LIKES OPERATIONS ==========
+
+  async getBlogLikes(blogId: string): Promise<{ data: BlogLike[]; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      const { data, error } = await client
+        .from('blog_likes')
+        .select('*')
+        .eq('blog_id', blogId);
+      return { data: data ?? [], error };
+    });
+  }
+
+  async toggleBlogLike(blogId: string, userId: string): Promise<{ data: BlogLike | null; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      // Check if like exists
+      const { data: existingLike } = await client
+        .from('blog_likes')
+        .select('*')
+        .eq('blog_id', blogId)
+        .eq('user_id', userId)
+        .single();
+
+      if (existingLike) {
+        // Remove like
+        await client
+          .from('blog_likes')
+          .delete()
+          .eq('blog_id', blogId)
+          .eq('user_id', userId);
+        return { data: null, error: null };
+      } else {
+        // Add like
+        return await client
+          .from('blog_likes')
+          .insert({ blog_id: blogId, user_id: userId })
+          .select()
+          .single();
+      }
+    });
+  }
+
+  // ========== COURSE ENROLLMENT OPERATIONS ==========
+
+  async getCourseEnrollments(userId: string): Promise<{ data: CourseEnrollment[]; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      const { data, error } = await client
+        .from('course_enrollments')
+        .select('*')
+        .eq('user_id', userId);
+      return { data: data ?? [], error };
+    });
+  }
+
+  async enrollInCourse(courseId: string, userId: string): Promise<{ data: CourseEnrollment | null; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      return await client
+        .from('course_enrollments')
+        .insert({ course_id: courseId, user_id: userId })
+        .select()
+        .single();
+    });
+  }
+
+  async updateEnrollmentProgress(enrollmentId: string, progress: number): Promise<{ data: CourseEnrollment | null; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      const updates: Partial<CourseEnrollment> = { progress };
+      
+      if (progress >= 100) {
+        updates.completed_at = new Date().toISOString();
+      }
+
+      return await client
+        .from('course_enrollments')
+        .update(updates)
+        .eq('id', enrollmentId)
+        .select()
+        .single();
+    });
+  }
+
+  // ========== BLOG VIEWS OPERATIONS ==========
+
+  /**
+   * Record a view for a blog post. Anyone (public) can call this.
+   */
+  async recordBlogView(blogId: string, options: {
+    userId?: string;
+    sessionId?: string;
+    viewerIp?: string;
+    viewerUserAgent?: string;
+  } = {}): Promise<{ data: BlogView | null; error: any }> {
+    // Use connection pool for high-frequency operations like view tracking
+    return this.connectionPool.executeWithConnection(async (client: SupabaseClient) => {
+      return await client
+        .from('blog_views')
+        .insert({
+          blog_id: blogId,
+          user_id: options.userId,
+          session_id: options.sessionId,
+          viewer_ip: options.viewerIp,
+          viewer_user_agent: options.viewerUserAgent
+        })
+        .select()
+        .single();
+    });
+  }
+
+  /**
+   * Get the total view count for a blog (public, author, or admin).
+   */
+  async getBlogViewCount(blogId: string): Promise<{ count: number; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      const { count, error } = await client
+        .from('blog_views')
+        .select('id', { count: 'exact', head: true })
+        .eq('blog_id', blogId);
+      return { count: count ?? 0, error };
+    });
+  }
+
+  /**
+   * Get all views for a blog (admin/author analytics).
+   */
+  async getBlogViews(blogId: string): Promise<{ data: BlogView[]; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      const { data, error } = await client
+        .from('blog_views')
+        .select('*')
+        .eq('blog_id', blogId)
+        .order('viewed_at', { ascending: false });
+      return { data: data ?? [], error };
+    });
+  }
+
+  /**
+   * Get total views for all blogs (admin analytics - only owned blogs).
+   */
+  async getAllBlogViews(): Promise<{ data: { blog_id: string; views: number }[]; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      // First get the current user's profile
+      const { data: userProfile, error: profileError } = await client
+        .from('user_profiles')
+        .select('full_name')
+        .eq('user_id', (await client.auth.getUser()).data.user?.id)
+        .single();
+      
+      if (profileError || !userProfile) {
+        return { data: [], error: profileError };
+      }
+
+      // Get blogs owned by this user
+      const { data: userBlogs, error: blogsError } = await client
+        .from('blogs')
+        .select('id')
+        .eq('author', userProfile.full_name);
+
+      if (blogsError || !userBlogs || userBlogs.length === 0) {
+        return { data: [], error: blogsError };
+      }
+
+      const blogIds = userBlogs.map(blog => blog.id);
+
+      // Get views for these blogs
+      const { data: views, error: viewsError } = await client
+        .from('blog_views')
+        .select('blog_id')
+        .in('blog_id', blogIds);
+
+      if (viewsError) return { data: [], error: viewsError };
+
+      // Aggregate in JS
+      const counts: Record<string, number> = {};
+      (views ?? []).forEach((row: { blog_id: string }) => {
+        if (row.blog_id) counts[row.blog_id] = (counts[row.blog_id] || 0) + 1;
+      });
+
+      return {
+        data: Object.entries(counts).map(([blog_id, views]) => ({ blog_id, views })),
+        error: null
+      };
+    });
+  }
+
+  /**
+   * Get public view counts for all blogs (public display).
+   */
+  async getPublicBlogViewCounts(): Promise<{ data: { blog_id: string; views: number }[]; error: any }> {
+    return this.connection.executeWithRetry(async (client: SupabaseClient) => {
+      const { data, error } = await client
+        .from('blog_views')
+        .select('blog_id');
+      if (error) return { data: [], error };
+      // Aggregate in JS
+      const counts: Record<string, number> = {};
+      (data ?? []).forEach((row: { blog_id: string }) => {
+        if (row.blog_id) counts[row.blog_id] = (counts[row.blog_id] || 0) + 1;
+      });
+      return {
+        data: Object.entries(counts).map(([blog_id, views]) => ({ blog_id, views })),
+        error: null
+      };
+    });
+  }
+
+  // ========== REALTIME SUBSCRIPTIONS ==========
+
+  async subscribeToBlogUpdates(callback: (payload: any) => void): Promise<void> {
+    await this.connection.subscribeToChannel('blog-updates', callback, 'blogs', {
+      events: ['INSERT', 'UPDATE', 'DELETE'],
+      autoReconnect: true
+    });
+  }
+
+  async subscribeToCourseUpdates(callback: (payload: any) => void): Promise<void> {
+    await this.connection.subscribeToChannel('course-updates', callback, 'courses', {
+      events: ['INSERT', 'UPDATE', 'DELETE'],
+      autoReconnect: true
+    });
+  }
+
+  async subscribeToComments(callback: (payload: any) => void): Promise<void> {
+    await this.connection.subscribeToChannel('comment-updates', callback, 'comments', {
+      events: ['INSERT', 'UPDATE', 'DELETE'],
+      autoReconnect: true
+    });
+  }
+
+  async subscribeToLikes(callback: (payload: any) => void): Promise<void> {
+    await this.connection.subscribeToChannel('like-updates', callback, 'blog_likes', {
+      events: ['INSERT', 'DELETE'],
+      autoReconnect: true
+    });
+  }
+
+  async subscribeToViews(callback: (payload: any) => void): Promise<void> {
+    await this.connection.subscribeToChannel('view-updates', callback, 'blog_views', {
+      events: ['INSERT'],
+      autoReconnect: true
+    });
+  }
+
+  // ========== UTILITY METHODS ==========
+
+  async getConnectionStatus(): Promise<'connected' | 'connecting' | 'disconnected' | 'error'> {
+    return this.connection.getConnectionStatus();
+  }
+
+  async getHealthStatus(): Promise<{
+    connectionState: string;
+    lastHealthCheck: number;
+    reconnectAttempts: number;
+    activeChannels: number;
+    isPageVisible: boolean;
+  }> {
+    return this.connection.getHealthStatus();
+  }
+
+  // ========== CONNECTION POOL OPERATIONS ==========
+
+  async executeWithPool<T>(
+    operation: (client: SupabaseClient) => Promise<T>
+  ): Promise<T> {
+    return this.connectionPool.executeWithConnection(operation);
+  }
+
+  async getPoolStatus() {
+    return this.connectionPool.getPoolStatus();
+  }
+
+  async cleanup(): Promise<void> {
+    this.connection.cleanup();
+  }
+
+  async shutdownPool(): Promise<void> {
+    return this.connectionPool.shutdown();
+  }
+}
+
+// Create singleton instance
+const supabaseService = new SupabaseService();
+
+// Export the service instance
+export default supabaseService;
+
+// Export individual methods for convenience
+export const {
+  getBlogs,
+  getBlogById,
+  createBlog,
+  updateBlog,
+  deleteBlog,
+  getCourses,
+  getCourseById,
+  createCourse,
+  updateCourse,
+  deleteCourse,
+  getUserProfile,
+  createUserProfile,
+  updateUserProfile,
+  getComments,
+  createComment,
+  updateComment,
+  deleteComment,
+  getBlogLikes,
+  toggleBlogLike,
+  getCourseEnrollments,
+  enrollInCourse,
+  updateEnrollmentProgress,
+  recordBlogView,
+  getBlogViewCount,
+  getBlogViews,
+  getAllBlogViews,
+  getPublicBlogViewCounts,
+  subscribeToBlogUpdates,
+  subscribeToCourseUpdates,
+  subscribeToComments,
+  subscribeToLikes,
+  subscribeToViews,
+  getConnectionStatus,
+  getHealthStatus,
+  cleanup,
+  executeWithPool,
+  getPoolStatus,
+  shutdownPool
+} = supabaseService; 

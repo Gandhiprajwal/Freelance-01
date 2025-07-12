@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageCircle, Send, Reply, Trash2, Edit3, X } from 'lucide-react';
-import { getSupabase } from '../../lib/supabaseConnection';
+import { MessageCircle, Send, Reply, Trash2, Edit3, X, Wifi, WifiOff } from 'lucide-react';
+import { getSupabaseConnection } from '../../lib/supabaseConnection';
 import { useAuth } from '../Auth/AuthProvider';
+import { useCommentQueue } from '../../lib/useRequestQueue';
 
 interface Comment {
   id: string;
@@ -37,6 +38,14 @@ const CommentSection: React.FC<CommentSectionProps> = ({ blogId, courseId, isOpe
   const [editContent, setEditContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [fetchingComments, setFetchingComments] = useState(false);
+  const { 
+    queueComment, 
+    queueReply, 
+    queueEditComment, 
+    queueDeleteComment, 
+    status: queueStatus, 
+    isConnected 
+  } = useCommentQueue();
 
   useEffect(() => {
     if (isOpen && (blogId || courseId)) {
@@ -49,10 +58,10 @@ const CommentSection: React.FC<CommentSectionProps> = ({ blogId, courseId, isOpe
     
     setFetchingComments(true);
     try {
-      console.log('Fetching comments for:', { blogId, courseId });
+      
+      const supabase = await getSupabaseConnection().getClient();
       
       // First, fetch top-level comments (no parent_id)
-      const supabase = await getSupabase();
       let query = supabase
         .from('comments')
         .select(`
@@ -78,8 +87,6 @@ const CommentSection: React.FC<CommentSectionProps> = ({ blogId, courseId, isOpe
         throw error;
       }
 
-      console.log('Top level comments fetched:', topLevelComments);
-
       if (!topLevelComments || topLevelComments.length === 0) {
         setComments([]);
         return;
@@ -87,9 +94,8 @@ const CommentSection: React.FC<CommentSectionProps> = ({ blogId, courseId, isOpe
 
       // Fetch replies for each top-level comment
       const commentsWithReplies = await Promise.all(
-        topLevelComments.map(async (comment) => {
+        topLevelComments.map(async (comment: Comment) => {
           try {
-            const supabase = await getSupabase();
             const { data: replies, error: repliesError } = await supabase
               .from('comments')
               .select(`
@@ -115,7 +121,6 @@ const CommentSection: React.FC<CommentSectionProps> = ({ blogId, courseId, isOpe
         })
       );
 
-      console.log('Comments with replies:', commentsWithReplies);
       setComments(commentsWithReplies);
     } catch (error) {
       console.error('Error fetching comments:', error);
@@ -131,38 +136,22 @@ const CommentSection: React.FC<CommentSectionProps> = ({ blogId, courseId, isOpe
 
     setLoading(true);
     try {
-      const supabase = await getSupabase();
-      const commentData = {
-        content: newComment.trim(),
-        user_id: user.id,
-        ...(blogId ? { blog_id: blogId } : { course_id: courseId })
-      };
+      
+      await queueComment(
+        newComment.trim(),
+        user.id,
+        blogId,
+        courseId
+      );
 
-      console.log('Submitting comment:', commentData);
-
-      const { data, error } = await supabase
-        .from('comments')
-        .insert([commentData])
-        .select(`
-          *,
-          user_profiles (
-            full_name,
-            avatar_url
-          )
-        `)
-        .single();
-
-      if (error) {
-        console.error('Error submitting comment:', error);
-        throw error;
-      }
-
-      console.log('Comment submitted successfully:', data);
       setNewComment('');
-      await fetchComments();
+      
+      // Fetch comments after a short delay to allow queue processing
+      setTimeout(() => {
+        fetchComments();
+      }, 1000);
     } catch (error) {
-      console.error('Error submitting comment:', error);
-      alert('Failed to submit comment. Please try again.');
+      alert('Failed to queue comment. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -173,40 +162,24 @@ const CommentSection: React.FC<CommentSectionProps> = ({ blogId, courseId, isOpe
 
     setLoading(true);
     try {
-      const supabase = await getSupabase();
-      const replyData = {
-        content: replyContent.trim(),
-        user_id: user.id,
-        parent_id: parentId,
-        ...(blogId ? { blog_id: blogId } : { course_id: courseId })
-      };
+      
+      await queueReply(
+        replyContent.trim(),
+        user.id,
+        parentId,
+        blogId,
+        courseId
+      );
 
-      console.log('Submitting reply:', replyData);
-
-      const { data, error } = await supabase
-        .from('comments')
-        .insert([replyData])
-        .select(`
-          *,
-          user_profiles (
-            full_name,
-            avatar_url
-          )
-        `)
-        .single();
-
-      if (error) {
-        console.error('Error submitting reply:', error);
-        throw error;
-      }
-
-      console.log('Reply submitted successfully:', data);
       setReplyTo(null);
       setReplyContent('');
-      await fetchComments();
+      
+      // Fetch comments after a short delay to allow queue processing
+      setTimeout(() => {
+        fetchComments();
+      }, 1000);
     } catch (error) {
-      console.error('Error submitting reply:', error);
-      alert('Failed to submit reply. Please try again.');
+      alert('Failed to queue reply. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -217,44 +190,39 @@ const CommentSection: React.FC<CommentSectionProps> = ({ blogId, courseId, isOpe
 
     setLoading(true);
     try {
-      const supabase = await getSupabase();
-      const { error } = await supabase
-        .from('comments')
-        .update({ 
-          content: editContent.trim(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', commentId);
-
-      if (error) throw error;
+      
+      await queueEditComment(commentId, editContent.trim());
 
       setEditingComment(null);
       setEditContent('');
-      await fetchComments();
+      
+      // Fetch comments after a short delay to allow queue processing
+      setTimeout(() => {
+        fetchComments();
+      }, 1000);
     } catch (error) {
-      console.error('Error editing comment:', error);
-      alert('Failed to edit comment. Please try again.');
+      alert('Failed to queue comment edit. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDeleteComment = async (commentId: string) => {
-    if (!window.confirm('Are you sure you want to delete this comment?')) return;
+    if (!confirm('Are you sure you want to delete this comment?')) return;
 
+    setLoading(true);
     try {
-      const supabase = await getSupabase();
-      const { error } = await supabase
-        .from('comments')
-        .delete()
-        .eq('id', commentId);
-
-      if (error) throw error;
-
-      await fetchComments();
+      
+      await queueDeleteComment(commentId);
+      
+      // Fetch comments after a short delay to allow queue processing
+      setTimeout(() => {
+        fetchComments();
+      }, 1000);
     } catch (error) {
-      console.error('Error deleting comment:', error);
-      alert('Failed to delete comment. Please try again.');
+      alert('Failed to queue comment deletion. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 

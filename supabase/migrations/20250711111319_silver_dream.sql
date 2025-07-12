@@ -122,6 +122,17 @@ CREATE TABLE IF NOT EXISTS user_preferences (
   updated_at timestamptz DEFAULT now()
 );
 
+-- Create blog views table for tracking view counts
+CREATE TABLE IF NOT EXISTS blog_views (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  blog_id uuid REFERENCES blogs(id) ON DELETE CASCADE,
+  viewed_at timestamptz DEFAULT now(),
+  viewer_ip inet,
+  viewer_user_agent text,
+  user_id uuid REFERENCES auth.users(id),
+  session_id text
+);
+
 -- Enable RLS on all tables
 ALTER TABLE blogs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE courses ENABLE ROW LEVEL SECURITY;
@@ -131,6 +142,7 @@ ALTER TABLE comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE newsletter_subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE course_enrollments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE blog_views ENABLE ROW LEVEL SECURITY;
 
 -- Blogs policies
 CREATE POLICY "Blogs are viewable by everyone"
@@ -260,6 +272,17 @@ CREATE POLICY "Users can manage own preferences"
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
+-- Blog views policies
+CREATE POLICY "Anyone can record blog views"
+  ON blog_views FOR INSERT
+  TO anon, authenticated
+  WITH CHECK (true);
+
+CREATE POLICY "Anyone can view blog view counts"
+  ON blog_views FOR SELECT
+  TO anon, authenticated
+  USING (true);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_blogs_created_at ON blogs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_blogs_featured ON blogs(featured);
@@ -287,6 +310,9 @@ CREATE INDEX IF NOT EXISTS idx_course_enrollments_user_id ON course_enrollments(
 CREATE INDEX IF NOT EXISTS idx_course_enrollments_course_id ON course_enrollments(course_id);
 
 CREATE INDEX IF NOT EXISTS idx_newsletter_email ON newsletter_subscriptions(email);
+
+CREATE INDEX IF NOT EXISTS idx_blog_views_blog_id ON blog_views(blog_id);
+CREATE INDEX IF NOT EXISTS idx_blog_views_viewed_at ON blog_views(viewed_at DESC);
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()

@@ -180,8 +180,8 @@ const About: React.FC = () => {
         </div>
       </section>
 
-      {/* Team Section */}
-      <section className="py-16">
+      {/* Why Robotics? Section */}
+      <section className="py-16 bg-gray-50 dark:bg-gray-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -189,64 +189,34 @@ const About: React.FC = () => {
             transition={{ duration: 0.6 }}
             className="text-center mb-12"
           >
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Meet Our Team
-            </h2>
-            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Our team of experts brings together decades of experience in robotics, education, and technology
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">Why Robotics?</h2>
+            <p className="text-lg mb-8 max-w-2xl mx-auto text-gray-600 dark:text-gray-300">
+              Robotics is shaping the future of society, industry, and education. Here’s why it matters:
             </p>
           </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {teamMembers.map((member, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow"
-              >
-                <img
-                  src={member.image}
-                  alt={member.name}
-                  className="w-full h-64 object-cover"
-                />
-                <div className="p-6">
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
-                    {member.name}
-                  </h3>
-                  <p className="text-orange-500 font-medium mb-3">
-                    {member.role}
-                  </p>
-                  <p className="text-gray-600 dark:text-gray-300 mb-4">
-                    {member.description}
-                  </p>
-                  <div className="flex space-x-3">
-                    <motion.a
-                      whileHover={{ scale: 1.1 }}
-                      href={member.social.linkedin}
-                      className="text-gray-400 hover:text-orange-500 transition-colors"
-                    >
-                      <Linkedin className="w-5 h-5" />
-                    </motion.a>
-                    <motion.a
-                      whileHover={{ scale: 1.1 }}
-                      href={member.social.twitter}
-                      className="text-gray-400 hover:text-orange-500 transition-colors"
-                    >
-                      <Twitter className="w-5 h-5" />
-                    </motion.a>
-                    <motion.a
-                      whileHover={{ scale: 1.1 }}
-                      href={member.social.github}
-                      className="text-gray-400 hover:text-orange-500 transition-colors"
-                    >
-                      <Github className="w-5 h-5" />
-                    </motion.a>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center border-b-4 border-orange-500 shadow">
+              <div className="text-4xl font-bold mb-2 text-orange-500">$135B+</div>
+              <div className="text-sm opacity-90 text-gray-700 dark:text-gray-300">Global robotics market by 2025</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center border-b-4 border-orange-500 shadow">
+              <div className="text-4xl font-bold mb-2 text-orange-500">3M+</div>
+              <div className="text-sm opacity-90 text-gray-700 dark:text-gray-300">Robots in use worldwide</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center border-b-4 border-orange-500 shadow">
+              <div className="text-4xl font-bold mb-2 text-orange-500">70%</div>
+              <div className="text-sm opacity-90 text-gray-700 dark:text-gray-300">Jobs will require STEM skills by 2030</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 text-center border-b-4 border-orange-500 shadow">
+              <div className="text-4xl font-bold mb-2 text-orange-500">∞</div>
+              <div className="text-sm opacity-90 text-gray-700 dark:text-gray-300">Opportunities for innovation & impact</div>
+            </div>
+          </div>
+          <div className="mt-12 text-center">
+            <h3 className="text-2xl font-bold mb-2 text-gray-900 dark:text-white">Future Trends</h3>
+            <p className="text-lg max-w-2xl mx-auto text-gray-600 dark:text-gray-300">
+              From healthcare robots to AI-driven automation, robotics is revolutionizing every industry. The next decade will see robots collaborating with humans, solving global challenges, and inspiring the next generation of innovators.
+            </p>
           </div>
         </div>
       </section>

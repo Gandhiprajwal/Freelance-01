@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Send, CheckCircle } from 'lucide-react';
-import { getSupabase } from '../../lib/supabaseConnection';
+import { getSupabaseConnection } from '../../lib/supabaseConnection';
 
 const Newsletter: React.FC = () => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const connection = getSupabaseConnection();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -15,10 +16,11 @@ const Newsletter: React.FC = () => {
     setError(null);
 
     try {
-      const supabase = await getSupabase();
-      const { error } = await supabase
+      const { error } = await connection.executeWithRetry(async (client) => {
+        return await client
         .from('newsletter_subscriptions')
         .insert([{ email }]);
+      });
 
       if (error) {
         if (error.code === '23505') {

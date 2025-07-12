@@ -39,30 +39,83 @@ const MyBlogs: React.FC = () => {
     featured: false,
   });
 
-  // Restore draft on mount
+  // Restore draft on mount (only for new blog creation, not editing)
   useEffect(() => {
     const savedDraft = localStorage.getItem("myBlogDraft");
-    if (savedDraft) {
-      setFormData(JSON.parse(savedDraft));
+    if (savedDraft && !editingBlog) {
+      try {
+        const parsedDraft = JSON.parse(savedDraft);
+        setFormData(parsedDraft);
+      } catch (error) {
+        console.error('Error parsing saved draft:', error);
+        localStorage.removeItem("myBlogDraft");
+      }
     }
-  }, []);
-  // Save draft on change
+  }, [editingBlog, showModal]);
+
+  // Save draft on change (only for new blog creation, not editing)
   useEffect(() => {
-    localStorage.setItem("myBlogDraft", JSON.stringify(formData));
-  }, [formData]);
+    if (!editingBlog) {
+      localStorage.setItem("myBlogDraft", JSON.stringify(formData));
+    }
+  }, [formData, editingBlog]);
 
   useEffect(() => {
     refreshUserContent();
   }, []);
 
   useEffect(() => {
-    if (profile) {
+    if (profile && !editingBlog) {
       setFormData((prev) => ({
         ...prev,
         author: profile.full_name || profile.email,
       }));
     }
-  }, [profile]);
+  }, [profile, editingBlog]);
+
+  // Reset form to initial state
+  const resetForm = () => {
+    const initialFormData = {
+      title: "",
+      content: "",
+      snippet: "",
+      image: "",
+      tags: "",
+      author: profile?.full_name || profile?.email || "",
+      featured: false,
+    };
+    setFormData(initialFormData);
+    return initialFormData;
+  };
+
+  // Handle modal close
+  const handleModalClose = () => {
+    if (editingBlog) {
+      // If we were editing, clear the form and remove from localStorage
+      resetForm();
+      localStorage.removeItem("myBlogDraft");
+    }
+    setShowModal(false);
+    setEditingBlog(null);
+  };
+
+  // Handle opening modal for new blog
+  const handleAddNew = () => {
+    setEditingBlog(null);
+    // Don't reset form immediately - let the user start typing and save as draft
+    // Only reset if there's no existing draft
+    const savedDraft = localStorage.getItem("myBlogDraft");
+    if (!savedDraft) {
+      resetForm();
+    }
+    setShowModal(true);
+  };
+
+  // Clear draft and start fresh
+  const handleClearDraft = () => {
+    localStorage.removeItem("myBlogDraft");
+    resetForm();
+  };
 
   const filteredBlogs = userBlogs.filter(
     (blog) =>
@@ -90,15 +143,7 @@ const MyBlogs: React.FC = () => {
 
       // Clear draft on successful submit
       localStorage.removeItem("myBlogDraft");
-      setFormData({
-        title: "",
-        content: "",
-        snippet: "",
-        image: "",
-        tags: "",
-        author: profile?.full_name || profile?.email || "",
-        featured: false,
-      });
+      resetForm();
       setShowModal(false);
       setEditingBlog(null);
       await refreshUserContent();
@@ -109,6 +154,9 @@ const MyBlogs: React.FC = () => {
   };
 
   const handleEdit = (blog: Blog) => {
+    // Clear any existing draft when editing
+    localStorage.removeItem("myBlogDraft");
+    
     setEditingBlog(blog);
     setFormData({
       title: blog.title,
@@ -189,7 +237,7 @@ const MyBlogs: React.FC = () => {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setShowModal(true)}
+              onClick={handleAddNew}
               className="flex items-center space-x-2 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -233,7 +281,7 @@ const MyBlogs: React.FC = () => {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setShowModal(true)}
+              onClick={handleAddNew}
               className="inline-flex items-center space-x-2 px-6 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -256,19 +304,7 @@ const MyBlogs: React.FC = () => {
                   {editingBlog ? "Edit Blog Post" : "Add New Blog Post"}
                 </h3>
                 <button
-                  onClick={() => {
-                    setShowModal(false);
-                    setEditingBlog(null);
-                    setFormData({
-                      title: "",
-                      content: "",
-                      snippet: "",
-                      image: "",
-                      tags: "",
-                      author: profile?.full_name || profile?.email || "",
-                      featured: false,
-                    });
-                  }}
+                  onClick={handleModalClose}
                   className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 >
                   <X className="w-6 h-6" />
@@ -396,12 +432,18 @@ const MyBlogs: React.FC = () => {
                   >
                     {editingBlog ? "Update" : "Create"} Blog Post
                   </motion.button>
+                  {!editingBlog && (
+                    <button
+                      type="button"
+                      onClick={handleClearDraft}
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      Clear Draft
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => {
-                      setShowModal(false);
-                      setEditingBlog(null);
-                    }}
+                    onClick={handleModalClose}
                     className="flex-1 bg-gray-500 text-white py-2 rounded-lg hover:bg-gray-600 transition-colors"
                   >
                     Cancel

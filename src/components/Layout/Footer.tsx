@@ -1,33 +1,25 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Settings, Mail, Phone, MapPin, Facebook, Twitter, Instagram, Youtube } from 'lucide-react';
+import { Settings, Mail, Phone, MapPin, Facebook, Twitter, Instagram, Youtube, Linkedin, Github } from 'lucide-react';
 import Newsletter from '../Features/Newsletter';
+import { siteConfig, urlHelpers } from '../../config/siteConfig';
+import logo  from  '../../assets/logo.png'
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
 
   const socialLinks = [
-    { icon: Facebook, href: '#', label: 'Facebook' },
-    { icon: Twitter, href: '#', label: 'Twitter' },
-    { icon: Instagram, href: '#', label: 'Instagram' },
-    { icon: Youtube, href: '#', label: 'YouTube' }
+    { icon: Twitter, href: siteConfig.social.twitter, label: 'Twitter' },
+    { icon: Linkedin, href: siteConfig.social.linkedin, label: 'LinkedIn' },
+    { icon: Youtube, href: siteConfig.social.youtube, label: 'YouTube' },
+    { icon: Facebook, href: siteConfig.social.facebook, label: 'Facebook' },
+    { icon: Instagram, href: siteConfig.social.instagram, label: 'Instagram' },
+    { icon: Github, href: siteConfig.social.github, label: 'GitHub' }
   ];
 
-  const quickLinks = [
-    { path: '/', label: 'Home' },
-    { path: '/blogs', label: 'Blogs' },
-    { path: '/courses', label: 'Courses' },
-    { path: '/about', label: 'About' },
-    { path: '/contact', label: 'Contact' }
-  ];
-
-  const resourceLinks = [
-    { path: '/tutorials', label: 'Tutorials' },
-    { path: '/documentation', label: 'Documentation' },
-    { path: '/community', label: 'Community' },
-    { path: '/support', label: 'Support' }
-  ];
+  const quickLinks = siteConfig.navigation.main;
+  const footerLinks = siteConfig.navigation.footer;
 
   return (
     <footer className="bg-gray-900 text-white">
@@ -39,23 +31,25 @@ const Footer: React.FC = () => {
               <motion.div
                 whileHover={{ rotate: 360 }}
                 transition={{ duration: 0.5 }}
-                className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center"
+                className="w-10 h-10 bg-white rounded-full flex items-center justify-center"
               >
-                <Settings className="w-6 h-6 text-white" />
+                <img src={logo} alt="logo" className='w-10 h-10' />
               </motion.div>
               <div className="flex flex-col">
-                <span className="text-xl font-bold">ROBOSTAAN</span>
-                <span className="text-sm text-orange-500">An Ageless Adventure</span>
+                <span className="text-xl font-bold">{siteConfig.name}</span>
+                <span className="text-sm text-orange-500">{siteConfig.tagline}</span>
               </div>
             </Link>
             <p className="text-gray-400 text-sm">
-              Empowering the next generation of roboticists with cutting-edge education and hands-on experience.
+              {siteConfig.description}
             </p>
             <div className="flex space-x-4">
               {socialLinks.map((social) => (
                 <motion.a
                   key={social.label}
                   href={social.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   whileHover={{ scale: 1.2 }}
                   className="text-gray-400 hover:text-orange-500 transition-colors"
                   aria-label={social.label}
@@ -76,7 +70,7 @@ const Footer: React.FC = () => {
                     to={link.path}
                     className="text-gray-400 hover:text-orange-500 transition-colors text-sm"
                   >
-                    {link.label}
+                    {link.name}
                   </Link>
                 </li>
               ))}
@@ -87,31 +81,59 @@ const Footer: React.FC = () => {
           <div>
             <h3 className="text-lg font-semibold mb-4">Resources</h3>
             <ul className="space-y-2">
-              {resourceLinks.map((link) => (
-                <li key={link.path}>
-                  <Link
-                    to={link.path}
-                    className="text-gray-400 hover:text-orange-500 transition-colors text-sm"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
+              <li>
+                <a
+                  href={siteConfig.social.github}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-orange-500 transition-colors text-sm"
+                >
+                  Documentation
+                </a>
+              </li>
+              <li>
+                <a
+                  href={siteConfig.social.youtube}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-orange-500 transition-colors text-sm"
+                >
+                  Tutorials
+                </a>
+              </li>
+              <li>
+                <a
+                  href={siteConfig.social.linkedin}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-orange-500 transition-colors text-sm"
+                >
+                  Community
+                </a>
+              </li>
+              <li>
+                <Link
+                  to="/contact"
+                  className="text-gray-400 hover:text-orange-500 transition-colors text-sm"
+                >
+                  Support
+                </Link>
+              </li>
             </ul>
             <div className="mt-4">
               <h4 className="text-sm font-semibold mb-2">Contact Info</h4>
               <div className="space-y-2 text-sm text-gray-400">
                 <div className="flex items-center space-x-2">
                   <Mail className="w-4 h-4" />
-                  <span>info@robostaan.com</span>
+                  <span>{siteConfig.contact.email}</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Phone className="w-4 h-4" />
-                  <span>+1 (555) 123-4567</span>
+                  <span>{siteConfig.contact.phone}</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <MapPin className="w-4 h-4" />
-                  <span>123 Robotics St, Tech City</span>
+                  <span>{siteConfig.contact.address.city}, {siteConfig.contact.address.state}, {siteConfig.contact.address.country}</span>
                 </div>
               </div>
             </div>
@@ -126,18 +148,18 @@ const Footer: React.FC = () => {
         {/* Bottom Bar */}
         <div className="mt-8 pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center">
           <p className="text-gray-400 text-sm">
-            © {currentYear} ROBOSTAAN. All rights reserved.
+            © {currentYear} {siteConfig.legal.companyName}. All rights reserved.
           </p>
           <div className="flex space-x-6 mt-4 md:mt-0 text-sm text-gray-400">
-            <Link to="/privacy" className="hover:text-orange-500 transition-colors">
-              Privacy Policy
-            </Link>
-            <Link to="/terms" className="hover:text-orange-500 transition-colors">
-              Terms of Service
-            </Link>
-            <Link to="/cookies" className="hover:text-orange-500 transition-colors">
-              Cookie Policy
-            </Link>
+            {footerLinks.map((link) => (
+              <Link 
+                key={link.path} 
+                to={link.path} 
+                className="hover:text-orange-500 transition-colors"
+              >
+                {link.name}
+              </Link>
+            ))}
           </div>
         </div>
       </div>

@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Menu, X, Settings, Moon, Sun, AlertTriangle } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
 import { useAuth } from '../Auth/AuthProvider';
+import { useApp } from '../../context/AppContext';
 import SearchBar from '../Features/SearchBar';
 import UserProfile from '../Features/UserProfile';
+import { siteConfig } from '../../config/siteConfig';
+import logo  from  '../../assets/logo.png'
 
 const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -13,13 +15,7 @@ const Header: React.FC = () => {
   const { user, authError, loading: authLoading } = useAuth();
   const location = useLocation();
 
-  const navItems = [
-    { path: '/', label: 'Home' },
-    { path: '/blogs', label: 'Blogs' },
-    { path: '/courses', label: 'Courses' },
-    { path: '/about', label: 'About' },
-    { path: '/contact', label: 'Contact' }
-  ];
+  const navItems = siteConfig.navigation.main;
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -42,13 +38,13 @@ const Header: React.FC = () => {
             <motion.div
               whileHover={{ rotate: 360 }}
               transition={{ duration: 0.5 }}
-              className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center"
+              className="w-8 h-8 rounded-full flex items-center justify-center"
             >
-              <Settings className="w-5 h-5 text-white" />
+              <img src={logo} alt="logo" className='w-8 h-8' />
             </motion.div>
             <div className="flex flex-col">
-              <span className="text-xl font-bold text-gray-900 dark:text-white">ROBOSTAAN</span>
-              <span className="text-xs text-orange-500 -mt-1">An Ageless Adventure</span>
+              <span className="text-xl font-bold text-gray-900 dark:text-white">{siteConfig.name}</span>
+              <span className="text-xs text-orange-500 -mt-1">{siteConfig.tagline}</span>
             </div>
           </Link>
 
@@ -64,7 +60,7 @@ const Header: React.FC = () => {
                     : 'text-gray-700 dark:text-gray-300'
                 }`}
               >
-                {item.label}
+                {item.name}
               </Link>
             ))}
           </nav>
@@ -118,53 +114,53 @@ const Header: React.FC = () => {
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Mobile Navigation */}
-      {isMenuOpen && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          className="md:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700"
-        >
-          <div className="px-4 py-2 space-y-1">
-            {navItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={() => setIsMenuOpen(false)}
-                className={`block px-3 py-2 rounded-md text-base font-medium transition-colors ${
-                  isActive(item.path)
-                    ? 'text-orange-500 bg-orange-50 dark:bg-orange-900/20'
-                    : 'text-gray-700 dark:text-gray-300 hover:text-orange-500 hover:bg-gray-50 dark:hover:bg-gray-800'
-                }`}
-              >
-                {item.label}
-              </Link>
-            ))}
-            
-            {!user && (
-              <div className="pt-4 space-y-2">
+        {/* Mobile Navigation */}
+        {isMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="md:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700"
+          >
+            <div className="px-4 py-2 space-y-1">
+              {navItems.map((item) => (
                 <Link
-                  to="/login"
+                  key={item.path}
+                  to={item.path}
                   onClick={() => setIsMenuOpen(false)}
-                  className="block px-3 py-2 text-center text-orange-500 border border-orange-500 rounded-lg font-medium hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+                  className={`block px-3 py-2 rounded-md text-base font-medium transition-colors ${
+                    isActive(item.path)
+                      ? 'text-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                      : 'text-gray-700 dark:text-gray-300 hover:text-orange-500 hover:bg-gray-50 dark:hover:bg-gray-800'
+                  }`}
                 >
-                  Sign In
+                  {item.name}
                 </Link>
-                <Link
-                  to="/signup"
-                  onClick={() => setIsMenuOpen(false)}
-                  className="block px-3 py-2 text-center bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
-                >
-                  Sign Up
-                </Link>
-              </div>
-            )}
-          </div>
-        </motion.div>
-      )}
+              ))}
+              
+              {!user && (
+                <div className="pt-4 space-y-2">
+                  <Link
+                    to="/login"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="block px-3 py-2 text-center text-orange-500 border border-orange-500 rounded-lg font-medium hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    to="/signup"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="block px-3 py-2 text-center bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
+                  >
+                    Sign Up
+                  </Link>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </div>
     </header>
   );
 };

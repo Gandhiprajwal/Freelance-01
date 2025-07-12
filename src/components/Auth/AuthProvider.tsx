@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
-import { getSupabase } from '../../lib/supabaseConnection';
+import { getSupabaseConnection } from '../../lib/supabaseConnection';
 
 interface UserProfile {
   id: string;
@@ -41,6 +41,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const connection = getSupabaseConnection();
 
   // Cache profile data in localStorage to persist across refreshes
   const cacheProfile = (profileData: UserProfile | null) => {
@@ -97,18 +98,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUserProfile = async (userId: string, retries = 3): Promise<UserProfile | null> => {
     try {
-      const supabase = await getSupabase();
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
+      const { data, error } = await connection.executeWithRetry(async (client) => {
+        return await client
+          .from('user_profiles')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+      });
 
       if (error) {
         if (error.code === 'PGRST116') {
           // Profile doesn't exist, create one
-          const supabase = await getSupabase();
-          const { data: userData } = await supabase.auth.getUser();
+          const { data: userData } = await connection.executeWithRetry(async (client) => {
+            return await client.auth.getUser();
+          });
+          
           if (userData.user) {
             const newProfile = {
               user_id: userData.user.id,
@@ -117,12 +121,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: 'user' as const
             };
 
-            const supabase = await getSupabase();
-            const { data: createdProfile, error: createError } = await supabase
-              .from('user_profiles')
-              .insert([newProfile])
-              .select()
-              .single();
+            const { data: createdProfile, error: createError } = await connection.executeWithRetry(async (client) => {
+              return await client
+                .from('user_profiles')
+                .insert([newProfile])
+                .select()
+                .single();
+            });
 
             if (!createError && createdProfile) {
               setProfile(createdProfile);
@@ -185,41 +190,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // Get current session with timeout
-        getSupabase().then(supabase => {
-          supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session?.user) {
-              if (mounted) {
-                setUser(session.user);
-                // Fetch fresh profile data with timeout
-                const profilePromise = fetchUserProfile(session.user.id);
-                const profileTimeoutPromise = new Promise((resolve) => 
-                  setTimeout(() => resolve(null), 10000)
-                );
-                
-                Promise.race([profilePromise, profileTimeoutPromise]).then(profile => {
-                  if (mounted) {
-                    setProfile(profile || null);
-                  }
-                });
-              }
-            } else {
-              // No session, clear cached data
-              if (mounted) {
-                setUser(null);
-                setProfile(null);
-                cacheProfile(null);
-              }
+        connection.executeWithRetry(async (client) => {
+          const { data: { session } } = await client.auth.getSession();
+          if (session?.user) {
+            if (mounted) {
+              setUser(session.user);
+              // Fetch fresh profile data with timeout
+              const profilePromise = fetchUserProfile(session.user.id);
+              const profileTimeoutPromise = new Promise((resolve) => 
+                setTimeout(() => resolve(null), 10000)
+              );
+              
+              Promise.race([profilePromise, profileTimeoutPromise]).then(profile => {
+                if (mounted) {
+                  setProfile(profile as UserProfile | null);
+                }
+              });
             }
-          });
-        });
-      } catch (error) {
-        if (mounted) {
-          console.error('Auth initialization error:', error);
-          // Don't show error for timeout, just proceed
-          if (!error.message?.includes('timeout')) {
-            setAuthError('Authentication error occurred.');
+          } else {
+            // No session, clear cached data
+            if (mounted) {
+              setUser(null);
+              setProfile(null);
+              cacheProfile(null);
+            }
           }
-        }
+          return session;
+        });
+              } catch (error: any) {
+          if (mounted) {
+            console.error('Auth initialization error:', error);
+            // Don't show error for timeout, just proceed
+            if (!error.message?.includes('timeout')) {
+              setAuthError('Authentication error occurred.');
+            }
+          }
       } finally {
         if (mounted) {
           clearTimeout(initializationTimeout);
@@ -231,8 +236,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initializeAuth();
 
     // Listen for auth changes
-    getSupabase().then(supabase => {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    connection.executeWithRetry(async (client) => {
+      const { data: { subscription } } = client.auth.onAuthStateChange(
         async (event, session) => {
           if (!mounted) return;
 
@@ -248,50 +253,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setUser(session.user);
               // Fetch profile for the authenticated user
               await fetchUserProfile(session.user.id);
-            } else {
-              // User signed out or session expired
-              setUser(null);
-              setProfile(null);
-              cacheProfile(null);
             }
           } catch (error) {
-            if (mounted) {
-              setAuthError('Authentication error occurred.');
-              console.error('Auth state change error:', error);
-            }
-          } finally {
-            if (mounted) {
-              setLoading(false);
-            }
+            console.error('Auth state change error:', error);
+            setAuthError('Authentication error occurred.');
           }
         }
       );
 
-      return () => {
-        mounted = false;
-        clearTimeout(initializationTimeout);
-        subscription.unsubscribe();
-      };
+      return subscription;
     });
-  }, []);
+
+    return () => {
+      mounted = false;
+      clearTimeout(initializationTimeout);
+    };
+  }, [connection]);
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
-    if (!user || !profile) return;
+    if (!user) return;
 
     try {
-      const supabase = await getSupabase();
-      const updatedData = { ...updates, updated_at: new Date().toISOString() };
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .update(updatedData)
-        .eq('user_id', user.id)
-        .select()
-        .single();
+      const { data, error } = await connection.executeWithRetry(async (client) => {
+        return await client
+          .from('user_profiles')
+          .update({ ...updates, updated_at: new Date().toISOString() })
+          .eq('user_id', user.id)
+          .select()
+          .single();
+      });
 
       if (error) throw error;
-      
-      setProfile(data);
-      cacheProfile(data);
+      if (data) {
+        setProfile(data);
+        cacheProfile(data);
+      }
     } catch (error) {
       console.error('Error updating profile:', error);
       throw error;
@@ -300,28 +296,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
-      // Clear local state immediately
-      setUser(null);
-      setProfile(null);
-      setAuthError(null);
-      
-      // Clear all auth-related data from storage
-      clearAuthData();
-      
-      // Sign out from Supabase
-      const supabase = await getSupabase();
-      await supabase.auth.signOut();
-      
-      // Small delay to ensure cleanup is complete
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Force reload to ensure complete cleanup
-      window.location.href = '/';
+      await connection.executeWithRetry(async (client) => {
+        return await client.auth.signOut();
+      });
     } catch (error) {
-      console.error('Sign out error:', error);
-      // Even if there's an error, clear local data and redirect
-      clearAuthData();
-      window.location.href = '/';
+      console.error('Error signing out:', error);
     }
   };
 

@@ -162,7 +162,7 @@ INSERT INTO courses (title, description, content, image, duration, category, vid
 INSERT INTO user_profiles (user_id, email, full_name, avatar_url, bio, role) VALUES
 (
   gen_random_uuid(),
-  'admin@robostaan.com',
+  'admin@robostaan.in',
   'Admin User',
   'https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=400',
   'System administrator with full access to manage content and users. Passionate about robotics education and technology.',
@@ -170,7 +170,7 @@ INSERT INTO user_profiles (user_id, email, full_name, avatar_url, bio, role) VAL
 ),
 (
   gen_random_uuid(),
-  'instructor@robostaan.com',
+  'instructor@robostaan.in',
   'Dr. Sarah Johnson',
   'https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&cs=tinysrgb&w=400',
   'Lead instructor specializing in robotics programming and AI integration. PhD in Robotics from MIT.',
@@ -178,7 +178,7 @@ INSERT INTO user_profiles (user_id, email, full_name, avatar_url, bio, role) VAL
 ),
 (
   gen_random_uuid(),
-  'student@robostaan.com',
+  'student@robostaan.in',
   'John Student',
   'https://images.pexels.com/photos/3184436/pexels-photo-3184436.jpeg?auto=compress&cs=tinysrgb&w=400',
   'Enthusiastic robotics student learning the fundamentals of robot programming and design.',

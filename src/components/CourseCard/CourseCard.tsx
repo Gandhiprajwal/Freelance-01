@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Clock, Users, Star, Edit, Trash2, Eye, Bell, BellOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../Auth/AuthProvider';
-import { Course } from '../../lib/supabaseConnection';
+import { Course } from '../../lib/supabaseService';
 
 interface CourseCardProps {
   course: Course;
@@ -74,13 +74,13 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEdit, onDelete }) => 
         </div>
         
         {/* Admin Controls */}
-        {user && course.user_id === user.id && (
-          <div className="absolute bottom-4 right-4 flex space-x-2">
+        {user && isAdmin && (
+          <div className="absolute top-2 right-2 flex space-x-1">
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => onEdit?.(course)}
-              className="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+              className="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-all duration-200 shadow-lg hover:shadow-xl"
             >
               <Edit className="w-4 h-4" />
             </motion.button>
@@ -88,7 +88,7 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEdit, onDelete }) => 
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
               onClick={() => onDelete?.(course.id)}
-              className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+              className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-all duration-200 shadow-lg hover:shadow-xl"
             >
               <Trash2 className="w-4 h-4" />
             </motion.button>

@@ -65,59 +65,73 @@ The project includes migration files that need to be applied to your Supabase da
 After running migrations, create these demo accounts in Supabase Auth:
 
 1. Go to **Authentication** → **Users**
-2. Click **Add user** and create:
-   - **Admin**: `admin@robostaan.com` / `admin123`
-   - **Instructor**: `instructor@robostaan.com` / `instructor123`
-   - **Student**: `student@robostaan.com` / `student123`
+2. Create the following users:
 
-## Step 7: Test Connection
-1. Restart your development server:
+### Admin Account
+- **Email**: `admin@robostaan.in`
+- **Password**: `admin123`
+- **Role**: `admin`
+
+### Instructor Account
+- **Email**: `instructor@robostaan.in`
+- **Password**: `instructor123`
+- **Role**: `instructor`
+
+### Student Account
+- **Email**: `student@robostaan.in`
+- **Password**: `student123`
+- **Role**: `user`
+
+## Step 7: Test the Connection
+1. Start the development server:
    ```bash
    npm run dev
    ```
-2. Try to sign up or log in
-3. Check browser console for any errors
+
+2. Go to `http://localhost:5173`
+3. Try logging in with one of the demo accounts
+4. Check the browser console for any connection errors
 
 ## Troubleshooting
 
-### Common Issues:
+### Common Issues
 
-1. **CORS Errors**:
-   - Add your domain to allowed origins in Supabase dashboard
-   - For development: `http://localhost:5173`
+1. **"Invalid API key" error**
+   - Verify your Supabase URL and anon key are correct
+   - Make sure you're using the anon key, not the service role key
 
-2. **RLS (Row Level Security) Issues**:
-   - The migrations include proper RLS policies
-   - If you get permission errors, check the policies in Supabase dashboard
+2. **"Project not found" error**
+   - Check if your Supabase project is active
+   - Verify the project ID in the URL
 
-3. **Migration Errors**:
-   - If tables already exist, you might need to drop them first
-   - Or modify the migrations to use `CREATE TABLE IF NOT EXISTS`
+3. **"RLS policy violation" error**
+   - Make sure you've run the migration files
+   - Check that the user_profiles table exists
 
-4. **Authentication Errors**:
-   - Check if email confirmation is disabled for testing
-   - Verify the JWT secret is correct
+4. **"Connection timeout" error**
+   - Check your internet connection
+   - Verify the Supabase project is not paused
 
-### Alternative: Use Local Supabase
-If you continue having issues, you can run Supabase locally:
+### Debug Steps
 
-1. Install Docker
-2. Run:
-   ```bash
-   supabase start
-   ```
-3. Use the local credentials provided by the CLI
+1. Check browser console for detailed error messages
+2. Verify environment variables are loaded correctly
+3. Test Supabase connection in the dashboard
+4. Check if the project is in the correct region
 
 ## Production Deployment
-When deploying to production:
-1. Update environment variables with production Supabase credentials
-2. Configure proper redirect URLs
-3. Enable email confirmation
-4. Set up proper RLS policies for security
 
-## Need Help?
-If you're still having issues:
-1. Check Supabase logs in the dashboard
-2. Verify network connectivity
-3. Try creating a fresh Supabase project
-4. Contact Supabase support if needed
+For production deployment:
+
+1. Update environment variables with production Supabase credentials
+2. Configure proper redirect URLs for your domain
+3. Enable email confirmation if needed
+4. Set up proper RLS policies for production
+5. Configure CORS settings for your domain
+
+## Security Notes
+
+- Never commit your Supabase service role key to version control
+- Use environment variables for all sensitive configuration
+- Regularly rotate your API keys
+- Monitor your Supabase usage and costs

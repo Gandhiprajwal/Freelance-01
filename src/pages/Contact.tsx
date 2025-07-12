@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Phone, MapPin, Send } from 'lucide-react';
+import { siteConfig } from '../config/siteConfig';
 
 const Contact: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -11,8 +12,8 @@ const Contact: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission here
-    console.log('Form submitted:', formData);
+    // Handle form submission
+    console.log('Contact form submitted:', formData);
     alert('Thank you for your message! We\'ll get back to you soon.');
     setFormData({ name: '', email: '', message: '' });
   };
@@ -137,10 +138,10 @@ const Contact: React.FC = () => {
                       Email
                     </h3>
                     <p className="text-gray-600 dark:text-gray-300">
-                      info@robostaan.com
+                      {siteConfig.contact.email}
                     </p>
                     <p className="text-gray-600 dark:text-gray-300">
-                      support@robostaan.com
+                      support@{siteConfig.domain}
                     </p>
                   </div>
                 </div>
@@ -154,10 +155,10 @@ const Contact: React.FC = () => {
                       Phone
                     </h3>
                     <p className="text-gray-600 dark:text-gray-300">
-                      +1 (555) 123-4567
+                      {siteConfig.contact.phone}
                     </p>
                     <p className="text-gray-600 dark:text-gray-300">
-                      +1 (555) 987-6543
+                      Emergency: +91-XXXXXXXXXX
                     </p>
                   </div>
                 </div>
@@ -171,9 +172,9 @@ const Contact: React.FC = () => {
                       Address
                     </h3>
                     <p className="text-gray-600 dark:text-gray-300">
-                      123 Robotics Street<br />
-                      Tech Valley, CA 94000<br />
-                      United States
+                      {siteConfig.legal.companyName}<br />
+                      {siteConfig.contact.address.city}, {siteConfig.contact.address.state}<br />
+                      {siteConfig.contact.address.country}
                     </p>
                   </div>
                 </div>
@@ -181,35 +182,35 @@ const Contact: React.FC = () => {
             </div>
 
             {/* Map */}
-            <div className="bg-gray-200 dark:bg-gray-700 rounded-xl h-64 flex items-center justify-center">
+            {/* <div className="bg-gray-200 dark:bg-gray-700 rounded-xl h-64 flex items-center justify-center">
               <div className="text-center">
                 <MapPin className="w-12 h-12 text-gray-400 mx-auto mb-2" />
                 <p className="text-gray-500 dark:text-gray-400">
                   Interactive map would be embedded here
                 </p>
               </div>
-            </div>
+            </div> */}
 
             {/* Office Hours */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+            {/* <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 Office Hours
               </h3>
               <div className="space-y-2 text-gray-600 dark:text-gray-300">
                 <div className="flex justify-between">
                   <span>Monday - Friday</span>
-                  <span>9:00 AM - 6:00 PM</span>
+                  <span>9:00 AM - 6:00 PM IST</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Saturday</span>
-                  <span>10:00 AM - 4:00 PM</span>
+                  <span>10:00 AM - 4:00 PM IST</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Sunday</span>
                   <span>Closed</span>
                 </div>
               </div>
-            </div>
+            </div> */}
           </motion.div>
         </div>
       </div>

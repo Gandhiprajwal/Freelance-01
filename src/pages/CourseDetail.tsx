@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Clock, Users, Star, Play, Download, BookOpen } from 'lucide-react';
-import { getSupabase } from '../lib/supabaseConnection';
+import { getSupabaseConnection } from '../lib/supabaseConnection';
 
 type Course = {
   id: string;
@@ -24,18 +24,20 @@ const CourseDetail: React.FC = () => {
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const connection = getSupabaseConnection();
 
   useEffect(() => {
     const fetchCourse = async () => {
       if (!id) return;
 
       try {
-        const supabase = await getSupabase();
-        const { data, error } = await supabase
+        const { data, error } = await connection.executeWithRetry(async (client) => {
+          return await client
           .from('courses')
           .select('*')
           .eq('id', id)
           .single();
+        });
 
         if (error) throw error;
         setCourse(data);
@@ -48,7 +50,7 @@ const CourseDetail: React.FC = () => {
     };
 
     fetchCourse();
-  }, [id]);
+  }, [id, connection]);
 
   const getCategoryColor = (category: string) => {
     switch (category) {
