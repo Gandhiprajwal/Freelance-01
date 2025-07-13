@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Cookie, Settings, Eye, Shield, Mail, Phone, MapPin } from 'lucide-react';
+import { siteConfig } from '../config/siteConfig';
 
 const Cookies: React.FC = () => {
   const cookieTypes = [
@@ -204,21 +205,21 @@ const Cookies: React.FC = () => {
               <Mail className="w-5 h-5" />
               <div>
                 <p className="font-semibold">Email</p>
-                <p className="text-orange-100">cookies@robostaan.com</p>
+                <p className="text-orange-100">{siteConfig.contact.email}</p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
               <Phone className="w-5 h-5" />
               <div>
                 <p className="font-semibold">Phone</p>
-                <p className="text-orange-100">+1 (555) 123-4567</p>
+                <p className="text-orange-100">{siteConfig.contact.phone}</p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
               <MapPin className="w-5 h-5" />
               <div>
                 <p className="font-semibold">Address</p>
-                <p className="text-orange-100">123 Robotics Street<br />Tech Valley, CA 94000</p>
+                <p className="text-orange-100">{siteConfig.contact.address.city}, {siteConfig.contact.address.state}, {siteConfig.contact.address.country}</p>
               </div>
             </div>
           </div>

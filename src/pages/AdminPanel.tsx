@@ -94,15 +94,21 @@ const AdminPanel: React.FC = () => {
           .single();
       });
 
-      // Get blogs owned by this admin
+      // Get blogs owned by this admin using user_id
       const { data: userBlogs } = await connection.executeWithRetry(async (client) => {
         return await client
           .from('blogs')
-          .select('id')
-          .eq('author', userProfile?.full_name || '');
+          .select('id, title, user_id, author, created_at, views, blog_likes (count)')
+          .eq('user_id', user.id);
       });
 
       const userBlogIds = userBlogs?.map(blog => blog.id) || [];
+
+      // Calculate total views by summing the views column
+      const totalViews = userBlogs?.reduce((sum, blog) => sum + (blog.views || 0), 0) || 0;
+
+      // For popular blogs, sort by views
+      const blogsWithViews = (userBlogs || []).sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 5);
 
       // Use the connection manager for all database operations
       const [
@@ -111,7 +117,6 @@ const AdminPanel: React.FC = () => {
         { count: totalCourses },
         { count: totalLikes },
         { count: totalComments },
-        { count: totalViews },
         { count: usersCurrent },
         { count: usersPrevious },
         { count: blogsCurrent },
@@ -122,15 +127,12 @@ const AdminPanel: React.FC = () => {
         { count: likesPrevious },
         { count: commentsCurrent },
         { count: commentsPrevious },
-        { count: viewsCurrent },
-        { count: viewsPrevious }
       ] = await Promise.all([
         connection.executeWithRetry(async (client) => client.from('user_profiles').select('*', { count: 'exact', head: true })),
-        connection.executeWithRetry(async (client) => client.from('blogs').select('*', { count: 'exact', head: true }).eq('author', userProfile?.full_name || '')),
+        connection.executeWithRetry(async (client) => client.from('blogs').select('*', { count: 'exact', head: true }).eq('user_id', user.id)),
         connection.executeWithRetry(async (client) => client.from('courses').select('*', { count: 'exact', head: true }).eq('author', userProfile?.full_name || '')),
         connection.executeWithRetry(async (client) => client.from('blog_likes').select('*', { count: 'exact', head: true }).in('blog_id', userBlogIds)),
         connection.executeWithRetry(async (client) => client.from('comments').select('*', { count: 'exact', head: true }).in('blog_id', userBlogIds)),
-        connection.executeWithRetry(async (client) => client.from('blog_views').select('*', { count: 'exact', head: true }).in('blog_id', userBlogIds)),
         connection.executeWithRetry(async (client) => client.from('user_profiles').select('*', { count: 'exact', head: true }).gte('created_at', getDateNDaysAgo(7))),
         connection.executeWithRetry(async (client) => client.from('user_profiles').select('*', { count: 'exact', head: true }).gte('created_at', getDateNDaysAgo(14)).lt('created_at', getDateNDaysAgo(7))),
         connection.executeWithRetry(async (client) => client.from('blogs').select('*', { count: 'exact', head: true }).eq('author', userProfile?.full_name || '').gte('created_at', getDateNDaysAgo(7))),
@@ -141,8 +143,6 @@ const AdminPanel: React.FC = () => {
         connection.executeWithRetry(async (client) => client.from('blog_likes').select('*', { count: 'exact', head: true }).in('blog_id', userBlogIds).gte('created_at', getDateNDaysAgo(14)).lt('created_at', getDateNDaysAgo(7))),
         connection.executeWithRetry(async (client) => client.from('comments').select('*', { count: 'exact', head: true }).in('blog_id', userBlogIds).gte('created_at', getDateNDaysAgo(7))),
         connection.executeWithRetry(async (client) => client.from('comments').select('*', { count: 'exact', head: true }).in('blog_id', userBlogIds).gte('created_at', getDateNDaysAgo(14)).lt('created_at', getDateNDaysAgo(7))),
-        connection.executeWithRetry(async (client) => client.from('blog_views').select('*', { count: 'exact', head: true }).in('blog_id', userBlogIds).gte('viewed_at', getDateNDaysAgo(7))),
-        connection.executeWithRetry(async (client) => client.from('blog_views').select('*', { count: 'exact', head: true }).in('blog_id', userBlogIds).gte('viewed_at', getDateNDaysAgo(14)).lt('viewed_at', getDateNDaysAgo(7))),
       ]);
 
       // Calculate changes
@@ -155,39 +155,7 @@ const AdminPanel: React.FC = () => {
       const coursesChange = calcChange(coursesCurrent ?? 0, coursesPrevious ?? 0);
       const likesChange = calcChange(likesCurrent ?? 0, likesPrevious ?? 0);
       const commentsChange = calcChange(commentsCurrent ?? 0, commentsPrevious ?? 0);
-      const viewsChange = calcChange(viewsCurrent ?? 0, viewsPrevious ?? 0);
-
-      // Fetch popular blogs for this admin with view counts
-      const { data: popularBlogs } = await connection.executeWithRetry(async (client) => {
-        return await client
-        .from('blogs')
-        .select(`
-          id,
-          title,
-          author,
-          created_at,
-          blog_likes (count)
-        `)
-          .eq('author', userProfile?.full_name || '')
-        .order('created_at', { ascending: false })
-        .limit(5);
-      });
-
-      // Fetch blog views for popular blogs
-      const blogsWithViews = await Promise.all(
-        (popularBlogs || []).map(async (blog) => {
-          const { count: viewCount } = await connection.executeWithRetry(async (client) => {
-            return await client
-              .from('blog_views')
-              .select('*', { count: 'exact', head: true })
-              .eq('blog_id', blog.id);
-          });
-          return {
-            ...blog,
-            viewCount: viewCount || 0
-          };
-        })
-      );
+      const viewsChange = calcChange(totalViews, 0); // Calculate views change
 
       // Fetch recent activity (comments and likes on admin's blogs from last 7 days)
       const sevenDaysAgo = new Date();
@@ -271,6 +239,22 @@ const AdminPanel: React.FC = () => {
     } catch (error) {
       console.error('Error fetching analytics:', error);
     } finally {
+      setLoading(false);
+    }
+  };
+
+  // Enhanced refresh logic: reconnect if needed, then fetch analytics
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      // Check connection health
+      const health = await connection.getHealthStatus?.();
+      if (!health || health.connectionState !== 'connected') {
+        await connection.reconnect?.();
+      }
+      await fetchAnalytics();
+    } catch (err) {
+      // Optionally handle error
       setLoading(false);
     }
   };
@@ -415,7 +399,7 @@ const AdminPanel: React.FC = () => {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={fetchAnalytics}
+                onClick={handleRefresh}
                     className="flex items-center space-x-2 px-6 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl hover:from-orange-600 hover:to-red-600 transition-all duration-200 shadow-lg"
               >
                     <Zap className="w-4 h-4" />
@@ -634,7 +618,7 @@ const AdminPanel: React.FC = () => {
                         <div className="flex items-center space-x-1 text-sm">
                           <Eye className="w-4 h-4 text-blue-500" />
                           <span className="font-medium text-gray-900 dark:text-white">
-                            {blog.viewCount || 0}
+                            {blog.views || 0}
                           </span>
                         </div>
                       </div>

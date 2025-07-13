@@ -7,6 +7,7 @@ import { usePublicBlogViews } from '../../lib/useSupabase';
 interface BlogCardProps {
   blog: {
     id: string;
+    slug: string;
     title: string;
     snippet: string;
     image: string;
@@ -14,28 +15,22 @@ interface BlogCardProps {
     author: string;
     featured: boolean;
     created_at: string;
+    views: number; // Added views to the interface
   };
   onEdit?: (blog: any) => void;
   onDelete?: (id: string) => void;
 }
 
 const BlogCard: React.FC<BlogCardProps> = ({ blog, onEdit, onDelete }) => {
-  const { publicViews, isLoading: viewsLoading } = usePublicBlogViews();
-  
-  // Get view count for this blog
-  const getViewCount = (blogId: string) => {
-    const blogViews = publicViews.find(view => view.blog_id === blogId);
-    return blogViews?.views || 0;
-  };
-
-  const viewCount = getViewCount(blog.id);
+  // Remove usePublicBlogViews and getViewCount
+  const viewCount = blog.views || 0;
 
   return (
     <motion.div
       whileHover={{ y: -5 }}
       className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 relative"
     >
-      <Link to={`/blog/${blog.id}`}>
+      <Link to={`/blog/${blog.slug}`}>
         <div className="relative">
           <img
             src={blog.image}
@@ -100,7 +95,7 @@ const BlogCard: React.FC<BlogCardProps> = ({ blog, onEdit, onDelete }) => {
           )}
         </div>
 
-        <Link to={`/blog/${blog.id}`}>
+        <Link to={`/blog/${blog.slug}`}>
           <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 hover:text-orange-500 transition-colors">
             {blog.title}
           </h3>
@@ -123,7 +118,7 @@ const BlogCard: React.FC<BlogCardProps> = ({ blog, onEdit, onDelete }) => {
           </div>
           <div className="flex items-center space-x-1 text-orange-500">
             <Eye className="w-4 h-4" />
-            <span className="font-medium">{viewsLoading ? '...' : `${viewCount} views`}</span>
+            <span className="font-medium">{viewCount} views</span>
           </div>
         </div>
       </div>

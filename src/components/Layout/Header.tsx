@@ -11,6 +11,7 @@ import logo  from  '../../assets/logo.png'
 
 const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false); // New state for search modal
   const { darkMode, toggleDarkMode } = useApp();
   const { user, authError, loading: authLoading } = useAuth();
   const location = useLocation();
@@ -67,13 +68,15 @@ const Header: React.FC = () => {
 
           {/* Actions */}
           <div className="flex items-center space-x-4">
-            <SearchBar />
-            
+            {/* Show search icon on md+ screens */}
+            <div className="hidden md:block">
+              <SearchBar onClick={() => setIsSearchOpen(true)} />
+            </div>
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={toggleDarkMode}
-              className="p-2 text-gray-700 dark:text-gray-300 hover:text-orange-500 transition-colors"
+              className="hidden md:inline-flex p-2 text-gray-700 dark:text-gray-300 hover:text-orange-500 transition-colors"
             >
               {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </motion.button>
@@ -83,7 +86,7 @@ const Header: React.FC = () => {
             ) : user ? (
               <UserProfile />
             ) : (
-              <div className="flex items-center space-x-2">
+              <div className="hidden md:flex items-center space-x-2">
                 <Link to="/login">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
@@ -123,7 +126,18 @@ const Header: React.FC = () => {
             exit={{ opacity: 0, y: -20 }}
             className="md:hidden bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700"
           >
-            <div className="px-4 py-2 space-y-1">
+            <div className="px-4 py-2 pb-8 space-y-1">
+              {/* Mobile Dark/Light Toggle */}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={toggleDarkMode}
+                className="w-full flex items-center justify-center p-2 mb-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:text-orange-500 transition-colors"
+              >
+                {darkMode ? <Sun className="w-5 h-5 mr-2" /> : <Moon className="w-5 h-5 mr-2" />}
+                <span>{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
+              </motion.button>
+              
               {navItems.map((item) => (
                 <Link
                   key={item.path}
@@ -138,6 +152,14 @@ const Header: React.FC = () => {
                   {item.name}
                 </Link>
               ))}
+              
+              {/* Move SearchBar below Contact button for mobile */}
+              <div className="mt-4">
+                <SearchBar mobileButton onClick={() => {
+                  setIsMenuOpen(false);
+                  setTimeout(() => setIsSearchOpen(true), 50);
+                }} />
+              </div>
               
               {!user && (
                 <div className="pt-4 space-y-2">
@@ -161,6 +183,10 @@ const Header: React.FC = () => {
           </motion.div>
         )}
       </div>
+      {/* Render search modal at root level */}
+      {isSearchOpen && (
+        <SearchBar isModalOpen={isSearchOpen} onCloseModal={() => setIsSearchOpen(false)} />
+      )}
     </header>
   );
 };

@@ -116,16 +116,16 @@ export const siteConfig = {
   navigation: {
     main: [
       { name: 'Home', path: '/', external: false },
+      { name: 'About', path: '/about', external: false },
       { name: 'Blogs', path: '/blogs', external: false },
       { name: 'Courses', path: '/courses', external: false },
-      { name: 'About', path: '/about', external: false },
       { name: 'Contact', path: '/contact', external: false }
     ],
     footer: [
       { name: 'Privacy Policy', path: '/privacy', external: false },
       { name: 'Terms of Service', path: '/terms', external: false },
       { name: 'Cookie Policy', path: '/cookies', external: false },
-      { name: 'Support', path: '/support', external: false }
+      { name: 'Support', path: '/contact', external: false }
     ],
     admin: [
       { name: 'Admin Panel', path: '/admin', external: false },
@@ -154,6 +154,11 @@ export const siteConfig = {
     analytics: {
       googleAnalytics: import.meta.env.VITE_GA_ID || '',
       googleTagManager: import.meta.env.VITE_GTM_ID || ''
+    },
+    emailjs: {
+      serviceId: import.meta.env.VITE_EMAILJS_SERVICE_ID || '',
+      templateId: import.meta.env.VITE_EMAILJS_TEMPLATE_ID || '',
+      publicKey: import.meta.env.VITE_EMAILJS_PUBLIC_KEY || ''
     }
   },
   
@@ -200,8 +205,8 @@ export const urlHelpers = {
   },
   
   // Generate blog URL
-  blogUrl: (blogId: string): string => {
-    return `${siteConfig.baseUrl}/blog/${blogId}`;
+  blogUrl: (slug: string): string => {
+    return `${siteConfig.baseUrl}/blog/${slug}`;
   },
   
   // Generate course URL

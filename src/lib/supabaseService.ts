@@ -5,6 +5,7 @@ import { getConnectionPool } from './supabaseConnectionPool';
 // Types for better type safety
 export interface Blog {
   id: string;
+  slug: string;
   title: string;
   content: string;
   snippet: string;
@@ -14,6 +15,7 @@ export interface Blog {
   featured: boolean;
   created_at: string;
   updated_at: string;
+  views: number;
 }
 
 export interface Course {
@@ -448,6 +450,29 @@ class SupabaseService {
         })
         .select()
         .single();
+    });
+  }
+
+  /**
+   * Increment the views column in the blogs table by 1, only if not already viewed by this user or session.
+   */
+  async incrementBlogViews(blogId: string, userId?: string, sessionId?: string): Promise<void> {
+    await this.connection.executeWithRetry(async (client) => {
+      // Check if a view already exists for this user or session
+      const { count } = await client
+        .from('blog_views')
+        .select('id', { count: 'exact', head: true })
+        .eq('blog_id', blogId)
+        .or(userId ? `user_id.eq.${userId}` : `session_id.eq.${sessionId}`);
+      if (count && count > 0) return;
+      // Insert view record
+      await client.from('blog_views').insert({
+        blog_id: blogId,
+        user_id: userId,
+        session_id: sessionId
+      });
+      // Increment views column
+      await client.rpc('increment_blog_views', { blog_id: blogId });
     });
   }
 

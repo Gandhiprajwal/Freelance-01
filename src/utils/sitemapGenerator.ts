@@ -148,12 +148,12 @@ export const updateSitemapWithContent = async (
     // Fetch blogs
     const { data: blogs } = await supabase
       .from('blogs')
-      .select('id, updated_at')
+      .select('slug, updated_at')
       .order('updated_at', { ascending: false });
     
     if (blogs) {
-      sitemapData.blogs = blogs.map((blog: { id: string; updated_at?: string }) => ({
-        url: blog.id,
+      sitemapData.blogs = blogs.map((blog: { slug: string; updated_at?: string }) => ({
+        url: blog.slug,
         lastmod: blog.updated_at ? new Date(blog.updated_at).toISOString().split('T')[0] : undefined,
         changefreq: 'weekly' as const,
         priority: 0.8

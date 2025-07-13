@@ -10,21 +10,47 @@ import { generateBlogStructuredData, generateBreadcrumbStructuredData } from '..
 import { siteConfig, urlHelpers } from '../config/siteConfig';
 import supabaseService from '../lib/supabaseService';
 import { usePublicBlogViews } from '../lib/useSupabase';
+import { useAuth } from '../components/Auth/AuthProvider';
+
+type Blog = {
+  id: string;
+  slug: string;
+  title: string;
+  content: string;
+  snippet: string;
+  image: string;
+  tags: string[];
+  author: string;
+  featured: boolean;
+  created_at: string;
+  updated_at?: string;
+  views: number;
+};
 
 const BlogDetail: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { slug } = useParams<{ slug: string }>();
   const { blogs, loading } = useApp();
-  const [blog, setBlog] = useState<any>(null);
+  const [blog, setBlog] = useState<Blog | null>(null);
   const [showComments, setShowComments] = useState(false);
   const [viewRecorded, setViewRecorded] = useState(false);
   const { publicViews, refetch: refetchViews } = usePublicBlogViews();
+  const { user } = useAuth();
 
   useEffect(() => {
-    if (id && blogs.length > 0) {
-      const foundBlog = blogs.find(b => b.id === id);
+    if (slug && blogs.length > 0) {
+      const foundBlog = blogs.find(b => b.slug === slug);
       setBlog(foundBlog || null);
+      if (foundBlog) {
+        // Unique view logic
+        let sessionId = localStorage.getItem('robostaan_blog_session_id');
+        if (!sessionId) {
+          sessionId = crypto.randomUUID();
+          localStorage.setItem('robostaan_blog_session_id', sessionId);
+        }
+        supabaseService.incrementBlogViews(foundBlog.id, user?.id, user ? undefined : sessionId);
+      }
     }
-  }, [id, blogs]);
+  }, [slug, blogs, user]);
 
   // Record blog view when component mounts (only once per session)
   useEffect(() => {
@@ -90,7 +116,7 @@ const BlogDetail: React.FC = () => {
   }
 
   // Generate SEO data for this blog post
-  const blogUrl = urlHelpers.blogUrl(blog.id);
+  const blogUrl = urlHelpers.blogUrl(blog.slug);
   const blogStructuredData = generateBlogStructuredData({
     ...blog,
     url: blogUrl
@@ -192,7 +218,7 @@ const BlogDetail: React.FC = () => {
               </div>
               <div className="flex items-center space-x-2 text-orange-500">
                 <Eye className="w-4 h-4" />
-                <span className="font-medium">{getViewCount(blog.id)} views</span>
+                <span className="font-medium">{blog.views || 0} views</span>
               </div>
             </div>
 

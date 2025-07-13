@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Phone, MapPin, Send } from 'lucide-react';
 import { siteConfig } from '../config/siteConfig';
+import emailjs from 'emailjs-com';
+import { AnimatePresence } from 'framer-motion';
 
 const Contact: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -9,13 +11,47 @@ const Contact: React.FC = () => {
     email: '',
     message: ''
   });
+  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [statusMessage, setStatusMessage] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  React.useEffect(() => {
+    if (status !== 'idle') {
+      const timer = setTimeout(() => {
+        setStatus('idle');
+        setStatusMessage('');
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [status]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission
-    console.log('Contact form submitted:', formData);
-    alert('Thank you for your message! We\'ll get back to you soon.');
-    setFormData({ name: '', email: '', message: '' });
+    setStatus('idle');
+    setStatusMessage('');
+    setLoading(true);
+    try {
+      // Send email via EmailJS
+      await emailjs.send(
+        siteConfig.services.emailjs.serviceId,
+        siteConfig.services.emailjs.templateId,
+        {
+          from_name: formData.name,
+          from_email: formData.email,
+          message: formData.message
+        },
+        siteConfig.services.emailjs.publicKey
+      );
+      setStatus('success');
+      setStatusMessage("Thank you for your message! We'll get back to you soon.");
+      setFormData({ name: '', email: '', message: '' });
+    } catch (error) {
+      setStatus('error');
+      setStatusMessage('Failed to send message. Please try again later.');
+      console.error('EmailJS error:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -56,6 +92,41 @@ const Contact: React.FC = () => {
             </h2>
             
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Status Message */}
+              <AnimatePresence>
+                {status === 'success' && (
+                  <motion.div
+                    key={status}
+                    initial={{ opacity: 0, y: -16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 16 }}
+                    transition={{ duration: 0.5, type: 'spring' }}
+                    className="w-full max-w-lg mx-auto mb-4 p-6 rounded-2xl bg-gradient-to-br from-green-50 to-green-100 border border-green-200 shadow-xl flex flex-col items-center text-center"
+                    role="alert"
+                  >
+                    <span className="flex items-center justify-center w-14 h-14 rounded-full bg-green-500 shadow-lg mb-3 animate-pop">
+                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    </span>
+                    <span className="text-xl font-bold text-green-900 mb-1">Message Sent!</span>
+                    <span className="text-green-800 text-base font-medium mb-1">{statusMessage}</span>
+                    <span className="text-green-700 text-sm opacity-80">We'll get back to you soon. Thank you for reaching out!</span>
+                  </motion.div>
+                )}
+                {status === 'error' && (
+                  <motion.div
+                    key={status}
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    transition={{ duration: 0.4, type: 'spring' }}
+                    className="rounded-xl px-4 py-3 mb-2 text-base font-semibold flex items-center space-x-2 shadow-md bg-gradient-to-r from-red-100 to-red-200 text-red-900 border border-red-300"
+                    role="alert"
+                  >
+                    <svg className="w-6 h-6 text-red-500 animate-shake" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    <span>{statusMessage}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Full Name
@@ -105,13 +176,24 @@ const Contact: React.FC = () => {
               </div>
 
               <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={{ scale: 1.06 }}
+                whileTap={{ scale: 0.97 }}
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                 type="submit"
-                className="w-full flex items-center justify-center space-x-2 px-6 py-3 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
+                className="w-full flex items-center justify-center space-x-2 px-6 py-3 bg-orange-500 text-white rounded-xl font-semibold shadow-lg hover:bg-orange-600 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                disabled={loading}
               >
-                <Send className="w-4 h-4" />
-                <span>Send Message</span>
+                {loading ? (
+                  <span className="relative flex h-6 w-6 mr-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-30"></span>
+                    <span className="relative inline-flex rounded-full h-6 w-6 border-4 border-white border-t-transparent border-b-transparent animate-spin animate-pulse" style={{ borderTopColor: '#f97316', borderBottomColor: '#fff' }}></span>
+                  </span>
+                ) : (
+                  <Send className="w-5 h-5" />
+                )}
+                <span className="tracking-wide text-base">{loading ? 'Sending...' : 'Send Message'}</span>
               </motion.button>
             </form>
           </motion.div>

@@ -8,6 +8,7 @@ import { useAuth } from "../components/Auth/AuthProvider";
 
 type Blog = {
   id: string;
+  slug: string;
   title: string;
   content: string;
   snippet: string;
@@ -17,6 +18,7 @@ type Blog = {
   featured: boolean;
   created_at?: string;
   updated_at?: string;
+  views: number;
 };
 
 const MyBlogs: React.FC = () => {
@@ -117,6 +119,29 @@ const MyBlogs: React.FC = () => {
     resetForm();
   };
 
+  function generateSlug(title: string): string {
+    return title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/--+/g, '-');
+  }
+
+  function generateUniqueSlug(title: string, existingSlugs: string[]): string {
+    let baseSlug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/--+/g, '-');
+    let slug = baseSlug;
+    let counter = 2;
+    while (existingSlugs.includes(slug)) {
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+    return slug;
+  }
+
   const filteredBlogs = userBlogs.filter(
     (blog) =>
       blog.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -126,6 +151,14 @@ const MyBlogs: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // Only check for unique slug on new blog
+      let slug = '';
+      if (!editingBlog) {
+        const existingSlugs = userBlogs.map(b => b.slug);
+        slug = generateUniqueSlug(formData.title, existingSlugs);
+      } else {
+        slug = editingBlog.slug;
+      }
       const blogData = {
         ...formData,
         tags: formData.tags
@@ -133,6 +166,8 @@ const MyBlogs: React.FC = () => {
           .map((tag) => tag.trim())
           .filter((tag) => tag),
         author: profile?.full_name || profile?.email || formData.author,
+        slug,
+        views: editingBlog ? editingBlog.views : 0
       };
 
       if (editingBlog) {

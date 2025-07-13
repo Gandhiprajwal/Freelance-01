@@ -100,35 +100,9 @@ const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
   }
 
   return (
-    <div className={`flex items-center space-x-2 ${className}`}>
-      {/* Status indicator */}
-      <div className={`w-2 h-2 rounded-full ${getStatusColor()}`}></div>
-      
-      {/* Status text */}
-      <span className={`text-sm font-medium ${getStatusColor()}`}>
-        {getStatusText()}
-      </span>
-      
-      {/* Reconnect button for error state */}
-      {status.connectionState === 'error' && (
-        <button
-          onClick={handleReconnect}
-          disabled={isReconnecting}
-          className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
-        >
-          {isReconnecting ? 'Reconnecting...' : 'Reconnect'}
-        </button>
-      )}
-      
-      {/* Detailed status (optional) */}
-      {showDetails && (
-        <div className="text-xs text-gray-500 space-y-1">
-          <div>Uptime: {getUptimeText()}</div>
-          <div>Channels: {status.activeChannels}</div>
-          <div>Failures: {status.consecutiveFailures}</div>
-          <div>Last update: {lastUpdate.toLocaleTimeString()}</div>
-        </div>
-      )}
+    <div className="flex items-center space-x-2">
+      <span className={`w-3 h-3 rounded-full ${status === 'connected' ? 'bg-green-500' : status === 'connecting' ? 'bg-yellow-400' : 'bg-red-500'}`}></span>
+      <span>{status === 'connected' ? 'Online' : status === 'connecting' ? 'Reconnecting...' : 'Offline'}</span>
     </div>
   );
 };

@@ -10,6 +10,7 @@ import {
   Phone,
   MapPin,
 } from "lucide-react";
+import { siteConfig } from '../config/siteConfig';
 
 const Privacy: React.FC = () => {
   const sections = [

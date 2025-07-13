@@ -210,13 +210,37 @@ const Blogs: React.FC = () => {
     return blog.author === currentUserAuthor;
   };
 
+  function generateUniqueSlug(title: string, existingSlugs: string[]): string {
+    let baseSlug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .replace(/--+/g, '-');
+    let slug = baseSlug;
+    let counter = 2;
+    while (existingSlugs.includes(slug)) {
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+    return slug;
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      let slug = '';
+      if (!editingBlog) {
+        const existingSlugs = allBlogs.map(b => b.slug);
+        slug = generateUniqueSlug(formData.title, existingSlugs);
+      } else {
+        slug = editingBlog.slug;
+      }
       const blogData = {
         ...formData,
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
-        author: profile?.full_name || profile?.email || formData.author
+        author: profile?.full_name || profile?.email || formData.author,
+        slug,
+        views: editingBlog ? editingBlog.views : 0
       };
 
       if (editingBlog) {
@@ -320,7 +344,7 @@ const Blogs: React.FC = () => {
         "name": blog.author
       },
       "datePublished": blog.created_at,
-      "url": urlHelpers.blogUrl(blog.id)
+      "url": urlHelpers.blogUrl(blog.slug)
     }))
   };
 

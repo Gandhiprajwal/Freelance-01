@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { AppProvider } from "./context/AppContext";
 import { AuthProvider } from "./components/Auth/AuthProvider";
@@ -19,20 +19,44 @@ import AdminPanel from "./pages/AdminPanel";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Cookies from "./pages/Cookies";
+import { useEffect } from 'react';
+import { getSupabaseConnection } from './lib/supabaseConnection';
+import GoogleAnalytics from './components/Analytics/GoogleAnalytics';
+
+function useSupabasePing() {
+  useEffect(() => {
+    const connection = getSupabaseConnection();
+    const interval = setInterval(() => {
+      connection.getHealthStatus?.();
+    }, 2 * 60 * 1000); // every 2 minutes
+    return () => clearInterval(interval);
+  }, []);
+}
+
+function ScrollToTopOnRouteChange() {
+  const location = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+  }, [location.pathname]);
+  return null;
+}
 
 function App() {
+  useSupabasePing();
   return (
     <HelmetProvider>
-      <AuthProvider>
-        <AppProvider>
-          <Router>
+      <GoogleAnalytics />
+      <Router>
+        <ScrollToTopOnRouteChange />
+        <AuthProvider>
+          <AppProvider>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/" element={<Layout />}>
                 <Route index element={<Home />} />
                 <Route path="blogs" element={<Blogs />} />
-                <Route path="blog/:id" element={<BlogDetail />} />
+                <Route path="blog/:slug" element={<BlogDetail />} />
                 <Route path="courses" element={<Courses />} />
                 <Route path="course/:id" element={<CourseDetail />} />
                 <Route path="about" element={<About />} />
@@ -45,9 +69,9 @@ function App() {
                 <Route path="cookies" element={<Cookies />} />
               </Route>
             </Routes>
-          </Router>
-        </AppProvider>
-      </AuthProvider>
+          </AppProvider>
+        </AuthProvider>
+      </Router>
     </HelmetProvider>
   );
 }

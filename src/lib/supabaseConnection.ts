@@ -37,11 +37,11 @@ class SupabaseConnection {
   private readonly config: ConnectionConfig = {
     maxRetries: 5,
     retryDelay: 500, // Reduced from 1000ms
-    healthCheckInterval: 15_000, // Reduced from 30s to 15s
+    healthCheckInterval: 30_000, // 30s health check interval
     connectionTimeout: 8_000, // Reduced from 10s to 8s
     maxReconnectAttempts: 10, // Increased from 5 to 10
     visibilityCheckInterval: 3_000, // Reduced from 5s to 3s
-    heartbeatInterval: 10_000, // New: 10 second heartbeat
+    heartbeatInterval: 30_000, // 30s heartbeat interval
     reconnectBackoffMultiplier: 1.5 // Exponential backoff
   };
 
@@ -92,7 +92,7 @@ class SupabaseConnection {
       realtime: {
           params: { 
             eventsPerSecond: 10,
-            heartbeatIntervalMs: 15000, // Reduced from 30s
+            heartbeatIntervalMs: 30000, // 30 second heartbeat
             reconnectAfterMs: (tries: number) => Math.min(tries * 500, 5000) // Faster reconnection
           }
       },
