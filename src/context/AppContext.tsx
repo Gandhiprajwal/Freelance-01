@@ -90,7 +90,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch (e) {
         // Ignore errors, this is just to keep the backend warm
       }
-    }, 5 * 60 * 1000); // every 5 minutes
+    }, 30 * 1000); // every 30 seconds
     return () => clearInterval(interval);
   }, [connection]);
 
