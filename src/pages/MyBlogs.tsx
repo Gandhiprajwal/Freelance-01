@@ -49,7 +49,6 @@ const MyBlogs: React.FC = () => {
         const parsedDraft = JSON.parse(savedDraft);
         setFormData(parsedDraft);
       } catch (error) {
-        console.error('Error parsing saved draft:', error);
         localStorage.removeItem("myBlogDraft");
       }
     }
@@ -183,7 +182,6 @@ const MyBlogs: React.FC = () => {
       setEditingBlog(null);
       await refreshUserContent();
     } catch (error) {
-      console.error("Error saving blog:", error);
       alert("Error saving blog. Please try again.");
     }
   };
@@ -211,7 +209,6 @@ const MyBlogs: React.FC = () => {
         await deleteBlog(id);
         await refreshUserContent();
       } catch (error) {
-        console.error("Error deleting blog:", error);
         alert("Error deleting blog. Please try again.");
       }
     }

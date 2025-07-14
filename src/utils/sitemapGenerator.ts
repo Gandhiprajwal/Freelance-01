@@ -177,7 +177,6 @@ export const updateSitemapWithContent = async (
     
     return sitemapData;
   } catch (error) {
-    console.error('Error updating sitemap with content:', error);
     return sitemapData;
   }
 };
@@ -199,14 +198,11 @@ export const generateSitemapFiles = async (supabase: any): Promise<void> => {
     
     // In a real application, you would save these files to your server
     // For now, we'll just log them
-    console.log('Generated sitemap.xml:', sitemapXML);
-    console.log('Generated robots.txt:', robotsTxt);
     
     // You could also save these to Supabase Storage or your hosting platform
     // await supabase.storage.from('public').upload('sitemap.xml', sitemapXML);
     // await supabase.storage.from('public').upload('robots.txt', robotsTxt);
     
   } catch (error) {
-    console.error('Error generating sitemap files:', error);
   }
 }; 

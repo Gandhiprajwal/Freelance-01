@@ -355,8 +355,14 @@ class SupabaseConnection {
 
   private async handleConnectionError(): Promise<void> {
     if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
-      console.error('[Supabase] Max reconnection attempts reached');
+      // Instead of giving up, schedule another reconnection attempt after 10 seconds
       this.connectionState = 'error';
+      setTimeout(() => {
+        if (this.connectionState !== 'connected') {
+          this.reconnectAttempts = 0; // Optionally reset attempts
+          this.handleConnectionError();
+        }
+      }, 10000); // 10 seconds
       return;
     }
 

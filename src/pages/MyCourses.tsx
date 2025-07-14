@@ -72,7 +72,6 @@ const MyCourses: React.FC = () => {
       setEditingCourse(null);
       await refreshUserContent();
     } catch (error) {
-      console.error('Error saving course:', error);
       alert('Error saving course. Please try again.');
     }
   };
@@ -101,7 +100,6 @@ const MyCourses: React.FC = () => {
         await deleteCourse(id);
         await refreshUserContent();
       } catch (error) {
-        console.error('Error deleting course:', error);
         alert('Error deleting course. Please try again.');
       }
     }

@@ -162,6 +162,30 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
 
   const currentProject = editingProject || project!;
 
+  // Add categoryColors, hashStringToColorIndex, and getCategoryColor for badge styling
+  const categoryColors = [
+    'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200',
+    'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200',
+    'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200',
+    'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200',
+    'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200',
+    'bg-pink-100 dark:bg-pink-900 text-pink-800 dark:text-pink-200',
+    'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200',
+    'bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200',
+    'bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200',
+    'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200',
+  ];
+  function hashStringToColorIndex(str: string) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return Math.abs(hash) % categoryColors.length;
+  }
+  const getCategoryColor = (category: string) => {
+    return categoryColors[hashStringToColorIndex(category)];
+  };
+
   return (
     <AnimatePresence>
       <motion.div
@@ -184,6 +208,12 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white break-words">
                 {isEditing ? (editingProject ? 'Edit Project' : 'Add New Project') : currentProject.title}
               </h2>
+              {/* Show category badge if not editing */}
+              {!isEditing && currentProject.category && (
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ml-0 sm:ml-2 mt-2 sm:mt-0 ${getCategoryColor(currentProject.category)}`}>
+                  {currentProject.category}
+                </span>
+              )}
               {!isEditing && (
                 <div className="flex flex-wrap items-center space-x-2">
                   {onDownload && (

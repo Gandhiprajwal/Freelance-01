@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Download, Eye, Edit, Trash2, ExternalLink, Code, Calendar, TrendingDown } from 'lucide-react';
 import { Project } from '../../pages/Projects';
+import { Link } from 'react-router-dom';
 
 interface ProjectCardProps {
   project: Project;
@@ -11,6 +12,32 @@ interface ProjectCardProps {
   onDelete?: (id: string) => void;
 }
 
+// Replace getCategoryColor with a hash-based color picker
+const categoryColors = [
+  'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200',
+  'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200',
+  'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200',
+  'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200',
+  'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200',
+  'bg-pink-100 dark:bg-pink-900 text-pink-800 dark:text-pink-200',
+  'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200',
+  'bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200',
+  'bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-200',
+  'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200',
+];
+
+function hashStringToColorIndex(str: string) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash) % categoryColors.length;
+}
+
+const getCategoryColor = (category: string) => {
+  return categoryColors[hashStringToColorIndex(category)];
+};
+
 const ProjectCard: React.FC<ProjectCardProps> = ({
   project,
   onDownload,
@@ -18,18 +45,6 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   onEdit,
   onDelete
 }) => {
-  const getCategoryColor = (category: string) => {
-    const colors = {
-      'Web Development': 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200',
-      'Mobile App': 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200',
-      'IoT': 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200',
-      'AI/ML': 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200',
-      'Robotics': 'bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200',
-      'Game Development': 'bg-pink-100 dark:bg-pink-900 text-pink-800 dark:text-pink-200'
-    };
-    return colors[category as keyof typeof colors] || 'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200';
-  };
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -41,7 +56,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   return (
     <motion.div
       whileHover={{ y: -5 }}
-      className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300"
+      className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 relative h-full flex flex-col"
     >
       {/* Project Image */}
       <div className="relative">
@@ -56,10 +71,6 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             Featured
           </div>
         )}
-        {/* Category Badge */}
-        <div className={`absolute top-4 right-4 px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(project.category)}`}>
-          {project.category}
-        </div>
         {/* Admin Controls */}
         {(onEdit || onDelete) && (
           <div className="absolute bottom-4 right-4 flex space-x-2">
@@ -87,43 +98,31 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
         )}
       </div>
       {/* Project Content */}
-      <div className="p-6">
-        {/* Title and Tagline */}
-        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-          {project.title}
-        </h3>
-        <p className="text-orange-500 font-medium mb-3">
-          {project.tagline}
-        </p>
+      <div className="p-6 flex flex-col h-full">
+        {onView ? (
+          <h3
+            className="text-xl font-bold text-gray-900 dark:text-white mb-2 line-clamp-1 h-8 overflow-hidden hover:text-orange-500 transition-colors cursor-pointer"
+            onClick={() => onView(project)}
+          >
+            {project.title}
+          </h3>
+        ) : (
+          <Link to={`/projects/${project.id}`}>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 line-clamp-1 h-8 overflow-hidden hover:text-orange-500 transition-colors cursor-pointer">{project.title}</h3>
+          </Link>
+        )}
+        <p className="text-orange-500 font-medium mb-2 line-clamp-1 h-6 overflow-hidden">{project.tagline}</p>
         {/* Description */}
-        <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-3">
-          {project.description}
-        </p>
+        <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 line-clamp-2 h-10 overflow-hidden">{project.description}</p>
         {/* Technologies */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          {project.technologies.slice(0, 3).map((tech, index) => (
-            <span
-              key={index}
-              className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded-full"
-            >
-              {tech}
-            </span>
-          ))}
-          {project.technologies.length > 3 && (
-            <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded-full">
-              +{project.technologies.length - 3} more
-            </span>
-          )}
-        </div>
-        {/* Stats */}
-        <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-4">
-          <div className="flex items-center space-x-1">
+        <div className="flex-1"></div>
+        <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mt-auto">
+          <div className="flex items-center space-x-2">
             <TrendingDown className="w-4 h-4" />
             <span>{project.downloads?.toLocaleString?.() ?? 0} downloads</span>
           </div>
-          <div className="flex items-center space-x-1">
-            <Calendar className="w-4 h-4" />
-            <span>{formatDate(project.created_at)}</span>
+          <div className="flex items-center space-x-1 text-orange-500">
+            <span className="font-medium">{project.technologies?.length || 0} techs</span>
           </div>
         </div>
         {/* Action Buttons */}
@@ -137,17 +136,6 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
             >
               <Download className="w-4 h-4" />
               <span>Download ZIP</span>
-            </motion.button>
-          )}
-          {onView && (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => onView(project)}
-              className="flex items-center justify-center space-x-2 bg-gray-500 text-white py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors"
-            >
-              <Eye className="w-4 h-4" />
-              <span>View</span>
             </motion.button>
           )}
           {project.demoUrl && (
