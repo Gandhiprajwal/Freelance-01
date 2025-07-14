@@ -56,7 +56,7 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEdit, onDelete }) => 
         
         {/* Coming Soon Badge */}
         {isComingSoon && (
-          <div className="absolute top-4 left-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
+          <div className="absolute top-4 left-4 bg-orange-500 text-white px-4 py-2 rounded-full text-sm font-bold shadow-lg">
             Coming Soon
           </div>
         )}
@@ -129,7 +129,7 @@ const CourseCard: React.FC<CourseCardProps> = ({ course, onEdit, onDelete }) => 
               className={`flex-1 flex items-center justify-center space-x-2 py-2 rounded-lg font-medium transition-colors ${
                 isNotifying
                   ? 'bg-green-500 text-white hover:bg-green-600'
-                  : 'bg-purple-500 text-white hover:bg-purple-600'
+                  : 'bg-orange-500 text-white hover:bg-orange-600'
               }`}
             >
               {isNotifying ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}

@@ -1,16 +1,17 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, BookOpen, GraduationCap, Users } from 'lucide-react';
+import { ArrowRight, BookOpen, GraduationCap, Users, Code } from 'lucide-react';
 import Hero from '../components/Hero/Hero';
 import BlogCard from '../components/BlogCard/BlogCard';
 import CourseCard from '../components/CourseCard/CourseCard';
+import ProjectCard from '../components/ProjectCard/ProjectCard';
 import { useApp } from '../context/AppContext';
 import SEOHead from '../components/SEO/SEOHead';
 import { siteConfig, seoConfig } from '../config/siteConfig';
 
 const Home: React.FC = () => {
-  const { blogs, courses, refreshData } = useApp();
+  const { blogs, courses, projects, refreshData } = useApp();
 
   // Refresh data when component mounts
   useEffect(() => {
@@ -19,10 +20,12 @@ const Home: React.FC = () => {
 
   const featuredBlogs = blogs.filter(blog => blog.featured).slice(0, 3);
   const featuredCourses = courses.filter(course => course.featured).slice(0, 3);
+  const featuredProjects = projects.filter(project => project.featured).slice(0, 3);
 
   const stats = [
     { icon: BookOpen, label: 'Blog Posts', value: `${blogs.length}+` },
     { icon: GraduationCap, label: 'Courses', value: `${courses.length}+` },
+    { icon: Code, label: 'Projects', value: `${projects.length}+` },
     { icon: Users, label: 'Students', value: '10K+' }
   ];
 
@@ -51,14 +54,14 @@ const Home: React.FC = () => {
         {/* Stats Section */}
         <section className="py-16 bg-gray-50 dark:bg-gray-800">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="flex flex-row justify-center items-center gap-8 flex-wrap">
               {stats.map((stat, index) => (
                 <motion.div
                   key={index}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: index * 0.1 }}
-                  className="text-center"
+                  className="text-center min-w-[180px]"
                 >
                   <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-500 rounded-full mb-4">
                     <stat.icon className="w-8 h-8 text-white" />
@@ -169,6 +172,58 @@ const Home: React.FC = () => {
                     className="inline-flex items-center space-x-2 px-6 py-3 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
                   >
                     <span>View All Courses</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </motion.button>
+                </Link>
+              </motion.div>
+            </div>
+          </section>
+        )}
+
+        {/* Featured Projects Section */}
+        {featuredProjects.length > 0 && (
+          <section className="py-16 bg-gray-50 dark:bg-gray-800">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+                className="text-center mb-12"
+              >
+                <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+                  Featured Projects
+                </h2>
+                <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+                  Explore our top robotics projects and open-source innovations
+                </p>
+              </motion.div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+                {featuredProjects.map((project, index) => (
+                  <motion.div
+                    key={project.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: index * 0.1 }}
+                  >
+                    <ProjectCard project={project} />
+                  </motion.div>
+                ))}
+              </div>
+
+              <motion.div
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ duration: 0.5 }}
+                className="text-center"
+              >
+                <Link to="/projects">
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="inline-flex items-center space-x-2 px-6 py-3 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
+                  >
+                    <span>View All Projects</span>
                     <ArrowRight className="w-4 h-4" />
                   </motion.button>
                 </Link>

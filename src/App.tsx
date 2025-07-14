@@ -19,6 +19,8 @@ import AdminPanel from "./pages/AdminPanel";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Cookies from "./pages/Cookies";
+import Projects from './pages/Projects';
+import MyProjects from './pages/MyProjects';
 import { useEffect } from 'react';
 import { getSupabaseConnection } from './lib/supabaseConnection';
 import GoogleAnalytics from './components/Analytics/GoogleAnalytics';
@@ -63,10 +65,12 @@ function App() {
                 <Route path="contact" element={<Contact />} />
                 <Route path="my-blogs" element={<MyBlogs />} />
                 <Route path="my-courses" element={<MyCourses />} />
+                <Route path="my-projects" element={<MyProjects />} />
                 <Route path="admin" element={<AdminPanel />} />
                 <Route path="privacy" element={<Privacy />} />
                 <Route path="terms" element={<Terms />} />
                 <Route path="cookies" element={<Cookies />} />
+                <Route path="projects" element={<Projects />} />
               </Route>
             </Routes>
           </AppProvider>

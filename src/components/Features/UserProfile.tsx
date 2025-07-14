@@ -174,6 +174,15 @@ const UserProfile: React.FC = () => {
                 </Link>
 
                 <Link
+                  to="/my-projects"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center space-x-3 w-full p-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <BookOpen className="w-4 h-4 text-gray-500" />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">My Projects</span>
+                </Link>
+
+                <Link
                   to="/my-courses"
                   onClick={() => setIsOpen(false)}
                   className="flex items-center space-x-3 w-full p-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"

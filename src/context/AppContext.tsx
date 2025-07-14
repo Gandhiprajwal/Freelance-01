@@ -8,6 +8,7 @@ export type { Blog, Course };
 interface AppContextType {
   blogs: Blog[];
   courses: Course[];
+  projects: any[];
   userBlogs: Blog[];
   userCourses: Course[];
   darkMode: boolean;
@@ -19,6 +20,11 @@ interface AppContextType {
   addCourse: (course: Omit<Course, 'id' | 'created_at' | 'updated_at'>) => Promise<void>;
   updateCourse: (id: string, course: Partial<Course>) => Promise<void>;
   deleteCourse: (id: string) => Promise<void>;
+  addProject: (project: any) => Promise<void>;
+  updateProject: (id: string, project: any) => Promise<void>;
+  deleteProject: (id: string) => Promise<void>;
+  refreshProjects: () => Promise<void>;
+  setProjects: React.Dispatch<React.SetStateAction<any[]>>;
   toggleDarkMode: () => void;
   refreshData: () => Promise<void>;
   refreshUserContent: () => Promise<void>;
@@ -44,9 +50,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [dataCache, setDataCache] = useState<{
     blogs?: Blog[];
     courses?: Course[];
+    projects?: any[];
     lastFetch?: number;
   }>({});
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connected');
+  const [projects, setProjects] = useState<any[]>([]);
   
   const { isAdmin: authIsAdmin, user, profile } = useAuth();
   const connection = getSupabaseConnection();
@@ -144,58 +152,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const fetchData = async (forceRefresh = false) => {
     const now = Date.now();
     const cacheExpiry = 5 * 60 * 1000; // 5 minutes
-    
     // Use cache if available and not expired, unless force refresh
     if (!forceRefresh && dataCache.lastFetch && (now - dataCache.lastFetch) < cacheExpiry) {
       if (dataCache.blogs) setBlogs(dataCache.blogs);
       if (dataCache.courses) setCourses(dataCache.courses);
+      if (dataCache.projects) setProjects(dataCache.projects);
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
-      
-      // Fetch blogs using the connection manager
+      // Fetch blogs
+      let blogsData = [];
       try {
         const blogsResult = await connection.executeWithRetry(async (client) => {
           return await client.from('blogs').select('*').order('created_at', { ascending: false });
         });
-        
-        const blogsData = blogsResult?.data;
+        blogsData = blogsResult?.data || [];
         const blogsError = blogsResult?.error;
         if (blogsError && !blogsError.message.includes('relation "blogs" does not exist')) {
           console.error('Error fetching blogs:', blogsError);
         } else {
-          setBlogs(blogsData || []);
+          setBlogs(blogsData);
         }
       } catch (error) {
         console.error('Blogs fetch timeout or error:', error);
-        // Don't clear blogs on timeout, keep existing data
       }
 
-      // Fetch courses using the connection manager
+      // Fetch courses
+      let coursesData = [];
       try {
         const coursesResult = await connection.executeWithRetry(async (client) => {
           return await client.from('courses').select('*').order('created_at', { ascending: false });
         });
-        
-        const coursesData = coursesResult?.data;
+        coursesData = coursesResult?.data || [];
         const coursesError = coursesResult?.error;
         if (coursesError && !coursesError.message.includes('relation "courses" does not exist')) {
           console.error('Error fetching courses:', coursesError);
         } else {
-          setCourses(coursesData || []);
+          setCourses(coursesData);
         }
       } catch (error) {
         console.error('Courses fetch timeout or error:', error);
-        // Don't clear courses on timeout, keep existing data
+      }
+
+      // Fetch projects
+      let projectsData = [];
+      try {
+        const projectsResult = await connection.executeWithRetry(async (client) => {
+          return await client.from('projects').select('*').order('created_at', { ascending: false });
+        });
+        projectsData = projectsResult?.data || [];
+        const projectsError = projectsResult?.error;
+        if (projectsError && !projectsError.message.includes('relation "projects" does not exist')) {
+          console.error('Error fetching projects:', projectsError);
+        } else {
+          const normalizedProjects = (projectsData || []).map((p: any) => ({
+            ...p,
+            sourceFiles: p.source_files || [],
+            demoUrl: p.demo_url,
+            featured: !!p.featured
+          }));
+          setProjects(normalizedProjects);
+        }
+      } catch (error) {
+        console.error('Projects fetch timeout or error:', error);
       }
 
       // Update cache only if we got some data
       setDataCache({
-        blogs: blogs,
-        courses: courses,
+        blogs: blogsData,
+        courses: coursesData,
+        projects: projectsData,
         lastFetch: now
       });
     } catch (error) {
@@ -204,6 +233,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchProjects = async (forceRefresh = false) => {
+    const now = Date.now();
+    const cacheExpiry = 5 * 60 * 1000; // 5 minutes
+    if (!forceRefresh && dataCache.lastFetch && (now - dataCache.lastFetch) < cacheExpiry && dataCache.projects) {
+      setProjects(dataCache.projects);
+      setLoading(false);
+      return;
+    }
+    try {
+      setLoading(true);
+      const projectsResult = await connection.executeWithRetry(async (client) => {
+        return await client.from('projects').select('*').order('created_at', { ascending: false });
+      });
+      const projectsData = projectsResult?.data;
+      const projectsError = projectsResult?.error;
+      if (projectsError && !projectsError.message.includes('relation "projects" does not exist')) {
+        console.error('Error fetching projects:', projectsError);
+      } else {
+        const normalizedProjects = (projectsData || []).map((p: any) => ({
+          ...p,
+          sourceFiles: p.source_files || [],
+          demoUrl: p.demo_url,
+          featured: !!p.featured
+        }));
+        setProjects(normalizedProjects);
+      }
+      setDataCache(prev => ({
+        ...prev,
+        projects: projectsData || [],
+        lastFetch: now
+      }));
+    } catch (error) {
+      console.error('Projects fetch timeout or error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshProjects = async () => {
+    await fetchProjects(true);
   };
 
   const fetchUserContent = async () => {
@@ -481,6 +552,101 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addProject = async (project: any) => {
+    await ensureConnection();
+    try {
+      // Map camelCase to snake_case for Supabase
+      const supabaseProject = {
+        ...project,
+        demo_url: project.demoUrl,
+        source_files: project.sourceFiles,
+      };
+      delete supabaseProject.demoUrl;
+      delete supabaseProject.sourceFiles;
+      const { data, error } = await connection.executeWithRetry(async (client) => {
+        return await client
+          .from('projects')
+          .insert([supabaseProject])
+          .select()
+          .single();
+      });
+      if (error) throw error;
+      setProjects(prev => [{ ...data, sourceFiles: data.source_files || [], demoUrl: data.demo_url, featured: !!data.featured }, ...prev]);
+      setDataCache(prev => ({
+        ...prev,
+        projects: [{ ...data, sourceFiles: data.source_files || [], demoUrl: data.demo_url, featured: !!data.featured }, ...(prev.projects || [])],
+        lastFetch: Date.now()
+      }));
+    } catch (error) {
+      if (String(error).includes('connection') || String(error).includes('timeout')) {
+        setConnectionStatus('disconnected');
+      }
+      console.error('Error adding project:', error);
+      throw error;
+    }
+  };
+
+  const updateProject = async (id: string, updatedProject: any) => {
+    await ensureConnection();
+    try {
+      // Map camelCase to snake_case for Supabase
+      const supabaseProject = {
+        ...updatedProject,
+        demo_url: updatedProject.demoUrl,
+        source_files: updatedProject.sourceFiles,
+        updated_at: new Date().toISOString(),
+      };
+      delete supabaseProject.demoUrl;
+      delete supabaseProject.sourceFiles;
+      const { data, error } = await connection.executeWithRetry(async (client) => {
+        return await client
+          .from('projects')
+          .update(supabaseProject)
+          .eq('id', id)
+          .select()
+          .single();
+      });
+      if (error) throw error;
+      setProjects(prev => prev.map(project => project.id === id ? { ...data, sourceFiles: data.source_files || [], demoUrl: data.demo_url, featured: !!data.featured } : project));
+      setDataCache(prev => ({
+        ...prev,
+        projects: prev.projects?.map(project => project.id === id ? { ...data, sourceFiles: data.source_files || [], demoUrl: data.demo_url, featured: !!data.featured } : project),
+        lastFetch: Date.now()
+      }));
+    } catch (error) {
+      if (String(error).includes('connection') || String(error).includes('timeout')) {
+        setConnectionStatus('disconnected');
+      }
+      console.error('Error updating project:', error);
+      throw error;
+    }
+  };
+
+  const deleteProject = async (id: string) => {
+    await ensureConnection();
+    try {
+      const { error } = await connection.executeWithRetry(async (client) => {
+        return await client
+          .from('projects')
+          .delete()
+          .eq('id', id);
+      });
+      if (error) throw error;
+      setProjects(prev => prev.filter(project => project.id !== id));
+      setDataCache(prev => ({
+        ...prev,
+        projects: prev.projects?.filter(project => project.id !== id),
+        lastFetch: Date.now()
+      }));
+    } catch (error) {
+      if (String(error).includes('connection') || String(error).includes('timeout')) {
+        setConnectionStatus('disconnected');
+      }
+      console.error('Error deleting project:', error);
+      throw error;
+    }
+  };
+
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
   };
@@ -488,6 +654,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const value: AppContextType = {
     blogs,
     courses,
+    projects,
     userBlogs,
     userCourses,
     darkMode,
@@ -499,6 +666,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addCourse,
     updateCourse,
     deleteCourse,
+    addProject,
+    updateProject,
+    deleteProject,
+    refreshProjects,
+    setProjects,
     toggleDarkMode,
     refreshData,
     refreshUserContent

@@ -119,12 +119,14 @@ export const siteConfig = {
       { name: 'About', path: '/about', external: false },
       { name: 'Blogs', path: '/blogs', external: false },
       { name: 'Courses', path: '/courses', external: false },
+      { name: 'Projects', path: '/projects', external: false },
       { name: 'Contact', path: '/contact', external: false }
     ],
     footer: [
       { name: 'Privacy Policy', path: '/privacy', external: false },
       { name: 'Terms of Service', path: '/terms', external: false },
       { name: 'Cookie Policy', path: '/cookies', external: false },
+      { name: 'Projects', path: '/projects', external: false },
       { name: 'Support', path: '/contact', external: false }
     ],
     admin: [

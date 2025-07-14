@@ -273,7 +273,7 @@ const Courses: React.FC = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
-                className="bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl p-12 text-center text-white"
+                className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-12 text-center text-white"
               >
                 <div className="max-w-2xl mx-auto">
                   <h2 className="text-3xl font-bold mb-4">Exciting Courses Coming Soon!</h2>

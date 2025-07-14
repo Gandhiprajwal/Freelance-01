@@ -519,8 +519,6 @@ const Blogs: React.FC = () => {
                 >
                   <BlogCard 
                     blog={blog} 
-                    onEdit={canManageBlog(blog) ? handleEdit : undefined}
-                    onDelete={canManageBlog(blog) ? handleDelete : undefined}
                   />
                 </motion.div>
               ))}
