@@ -1,5 +1,6 @@
 // Sitemap generator utility for SEO
 import { siteConfig, urlHelpers } from '../config/siteConfig';
+import supabaseService from '../lib/supabaseService';
 
 export interface SitemapUrl {
   url: string;
@@ -174,6 +175,14 @@ export const updateSitemapWithContent = async (
         priority: 0.7
       }));
     }
+
+    // Only add the main /projects page to the sitemap
+    sitemapData.staticPages.push({
+      url: urlHelpers.fullUrl('/projects'),
+      lastmod: new Date().toISOString(),
+      changefreq: 'weekly',
+      priority: 0.8,
+    });
     
     return sitemapData;
   } catch (error) {

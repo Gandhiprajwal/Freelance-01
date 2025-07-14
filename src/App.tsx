@@ -21,6 +21,7 @@ import Terms from "./pages/Terms";
 import Cookies from "./pages/Cookies";
 import Projects from './pages/Projects';
 import MyProjects from './pages/MyProjects';
+import NotFound from './pages/NotFound';
 import { useEffect } from 'react';
 import { getSupabaseConnection } from './lib/supabaseConnection';
 import GoogleAnalytics from './components/Analytics/GoogleAnalytics';
@@ -71,6 +72,7 @@ function App() {
                 <Route path="terms" element={<Terms />} />
                 <Route path="cookies" element={<Cookies />} />
                 <Route path="projects" element={<Projects />} />
+                <Route path="*" element={<NotFound />} />
               </Route>
             </Routes>
           </AppProvider>

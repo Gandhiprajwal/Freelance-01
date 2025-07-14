@@ -189,6 +189,9 @@ export const siteConfig = {
     socialSharing: true,
     demoAccounts: true // Enable/disable demo accounts
   },
+
+  // Project Pagination
+  projectBatchSize: 10,
   
   // Legal Information
   legal: {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Plus, BookOpen } from 'lucide-react';
 import ProjectCard from '../components/ProjectCard/ProjectCard';
@@ -6,6 +6,7 @@ import ProjectModal from '../components/ProjectCard/ProjectModal';
 import { useAuth } from '../components/Auth/AuthProvider';
 import { useApp } from '../context/AppContext';
 import { getSupabase } from '../lib/supabaseConnection';
+import { siteConfig } from '../config/siteConfig';
 
 export interface Project {
   id: string;
@@ -34,59 +35,74 @@ const MyProjects: React.FC = () => {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const isFetchingRef = useRef(false);
 
-  // Move fetchProjects above useEffect hooks
+  // Infinite scroll fetch with pagination
   const fetchProjects = async (append = false) => {
-    if (!user) return;
+    if (!user || isFetchingRef.current || !hasMore) return;
     setIsLoading(true);
     setError(null);
+    isFetchingRef.current = true;
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000));
     try {
       const supabase = await getSupabase();
+      const batchSize = siteConfig.projectBatchSize || 10;
+      const from = (append ? page : 0) * batchSize;
+      const to = from + batchSize - 1;
       const fetchPromise = supabase
         .from('projects')
         .select('*')
         .eq('owner_id', user.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(from, to);
       const { data, error } = await Promise.race([fetchPromise, timeout]) as any;
       if (error) {
         setError('Failed to load projects.');
-        setProjects([]);
+        if (!append) setProjects([]);
       } else if (data) {
-        setProjects((prev) => append ? [...prev, ...(data || [])] : (data || []).map((p: any) => ({
-          ...p,
-          demoUrl: p.demo_url,
-          sourceFiles: p.source_files || [],
-        })));
+        if (append) {
+          setProjects((prev) => [...prev, ...(data || [])]);
+          setPage((prev) => prev + 1);
+        } else {
+          setProjects((data || []).map((p: any) => ({
+            ...p,
+            demoUrl: p.demo_url,
+            sourceFiles: p.source_files || [],
+          })));
+          setPage(1);
+        }
+        if (!data || data.length < batchSize) setHasMore(false);
       }
     } catch (err) {
       window.location.reload();
     } finally {
       setIsLoading(false);
+      isFetchingRef.current = false;
     }
   };
 
-  // Infinite scroll
+  // Infinite scroll handler
   useEffect(() => {
     const handleScroll = () => {
       if (
         window.innerHeight + window.scrollY >= document.body.offsetHeight - 200 &&
         !loading &&
-        projects.length > 0
+        hasMore &&
+        !isLoading
       ) {
         fetchProjects(true);
       }
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [loading, projects]);
+  }, [loading, hasMore, isLoading, user, page]);
 
   useEffect(() => {
-    if (isAdmin) {
-      refreshProjects();
-    } else {
-      fetchProjects();
-    }
+    setPage(0);
+    setHasMore(true);
+    fetchProjects(false);
     // eslint-disable-next-line
   }, [user]);
 
@@ -173,12 +189,14 @@ const MyProjects: React.FC = () => {
     }
   };
 
-  // Filtered projects
-  const filteredProjects = projects.filter(
-    (project) =>
-      project.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
-      (!selectedCategory || project.category.toLowerCase().includes(selectedCategory.toLowerCase()))
-  );
+  // Filtered projects (only owned by user)
+  const filteredProjects = projects
+    .filter((project) => project.owner_id === user?.id)
+    .filter(
+      (project) =>
+        project.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        (!selectedCategory || project.category.toLowerCase().includes(selectedCategory.toLowerCase()))
+    );
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 py-6 px-2 sm:py-8 sm:px-4">
