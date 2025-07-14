@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Calendar, User, Tag, Eye, Edit, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { usePublicBlogViews } from '../../lib/useSupabase';
+import BlogInteractions from './BlogInteractions';
 
 interface BlogCardProps {
   blog: {
@@ -28,7 +29,7 @@ const BlogCard: React.FC<BlogCardProps> = ({ blog, onEdit, onDelete }) => {
   return (
     <motion.div
       whileHover={{ y: -5 }}
-      className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 relative"
+      className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 relative h-full flex flex-col"
     >
       <Link to={`/blog/${blog.slug}`}>
         <div className="relative">
@@ -79,7 +80,7 @@ const BlogCard: React.FC<BlogCardProps> = ({ blog, onEdit, onDelete }) => {
         </div>
       )}
 
-      <div className="p-6">
+      <div className="p-6 flex flex-col h-full">
         <div className="flex flex-wrap gap-2 mb-3">
           {blog.tags.slice(0, 3).map((tag, index) => (
             <span
@@ -96,16 +97,16 @@ const BlogCard: React.FC<BlogCardProps> = ({ blog, onEdit, onDelete }) => {
         </div>
 
         <Link to={`/blog/${blog.slug}`}>
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 hover:text-orange-500 transition-colors">
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 hover:text-orange-500 transition-colors line-clamp-2 h-14 overflow-hidden">
             {blog.title}
           </h3>
         </Link>
 
-        <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 line-clamp-2">
+        <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 line-clamp-2 h-10 overflow-hidden">
           {blog.snippet}
         </p>
 
-        <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
+        <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mt-auto">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-1">
               <User className="w-4 h-4" />
@@ -121,6 +122,8 @@ const BlogCard: React.FC<BlogCardProps> = ({ blog, onEdit, onDelete }) => {
             <span className="font-medium">{viewCount} views</span>
           </div>
         </div>
+        {/* Add BlogInteractions for likes/comments count */}
+        <BlogInteractions blogId={blog.id} blogSlug={blog.slug} onCommentClick={() => {}} />
       </div>
     </motion.div>
   );

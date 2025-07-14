@@ -7,10 +7,11 @@ import { useLikeQueue } from '../../lib/useRequestQueue';
 
 interface BlogInteractionsProps {
   blogId: string;
+  blogSlug?: string;
   onCommentClick: () => void;
 }
 
-const BlogInteractions: React.FC<BlogInteractionsProps> = ({ blogId, onCommentClick }) => {
+const BlogInteractions: React.FC<BlogInteractionsProps> = ({ blogId, blogSlug, onCommentClick }) => {
   const { user } = useAuth();
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
@@ -29,7 +30,7 @@ const BlogInteractions: React.FC<BlogInteractionsProps> = ({ blogId, onCommentCl
   );
 
   useEffect(() => {
-    if (blogId && user) {
+    if (blogId) {
       fetchInteractionData();
     }
   }, [blogId, user]);
@@ -132,7 +133,7 @@ const BlogInteractions: React.FC<BlogInteractionsProps> = ({ blogId, onCommentCl
   };
 
   const handleShare = async () => {
-    const url = `${window.location.origin}/blog/${blogId}`;
+    const url = `${window.location.origin}/blog/${blogSlug || blogId}`;
     
     if (navigator.share) {
       try {

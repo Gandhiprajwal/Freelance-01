@@ -320,6 +320,7 @@ const BlogDetail: React.FC = () => {
           >
             <BlogInteractions 
               blogId={blog.id} 
+              blogSlug={blog.slug}
               onCommentClick={() => setShowComments(true)}
             />
           </motion.div>

@@ -16,6 +16,8 @@ const Login: React.FC = () => {
   });
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'error'>('checking');
+  const [magicLinkLoading, setMagicLinkLoading] = useState(false);
+  const [magicLinkMessage, setMagicLinkMessage] = useState<string | null>(null);
   const navigate = useNavigate();
   const { refreshData } = useApp();
   const { authError } = useAuth();
@@ -119,6 +121,30 @@ const Login: React.FC = () => {
       console.error('Login error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMagicLink = async () => {
+    setMagicLinkMessage(null);
+    if (!formData.email) {
+      setMagicLinkMessage('Please enter your email address.');
+      return;
+    }
+    setMagicLinkLoading(true);
+    try {
+      const connection = getSupabaseConnection();
+      const { error } = await connection.executeWithRetry(async (client) => {
+        return await client.auth.signInWithOtp({ email: formData.email });
+      });
+      if (error) {
+        setMagicLinkMessage('Failed to send magic link. Please try again.');
+      } else {
+        setMagicLinkMessage('Magic link sent! Check your email to log in.');
+      }
+    } catch (err) {
+      setMagicLinkMessage('Failed to send magic link. Please try again.');
+    } finally {
+      setMagicLinkLoading(false);
     }
   };
 
@@ -275,6 +301,25 @@ const Login: React.FC = () => {
               </>
             )}
           </motion.button>
+
+          {/* Magic Link Login */}
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={handleMagicLink}
+              disabled={!formData.email || magicLinkLoading}
+              className="w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-lg text-orange-500 bg-orange-100 hover:bg-orange-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {magicLinkLoading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-500"></div>
+              ) : (
+                'Login with Magic Link'
+              )}
+            </button>
+            {magicLinkMessage && (
+              <div className="mt-2 text-sm text-orange-600 dark:text-orange-400">{magicLinkMessage}</div>
+            )}
+          </div>
 
           <div className="text-center">
             <p className="text-sm text-gray-600 dark:text-gray-300">

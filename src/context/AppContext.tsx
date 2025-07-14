@@ -118,6 +118,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [connectionStatus, connection]);
 
+  // Automatically refetch data when connection is restored
+  useEffect(() => {
+    if (connectionStatus === 'connected') {
+      fetchDataWithTimeout(true); // force refresh on reconnection
+    }
+  }, [connectionStatus]);
+
   const ensureConnection = async () => {
     if (connectionStatus !== 'connected') {
       setConnectionStatus('connecting');

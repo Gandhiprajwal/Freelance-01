@@ -71,6 +71,7 @@ class SupabaseConnection {
     this.setupVisibilityHandling();
     this.setupCleanup();
     this.startHeartbeat();
+    this.startAggressiveHealthCheck();
   }
 
   private validateEnvironment(): void {
@@ -315,6 +316,7 @@ class SupabaseConnection {
         
         if (this.isConnectionError(error) || this.consecutiveFailures >= this.maxConsecutiveFailures) {
           await this.handleConnectionError();
+          this.startAggressiveHealthCheck();
         }
       } else {
         this.lastHealthCheck = Date.now();
@@ -332,6 +334,7 @@ class SupabaseConnection {
       
       if (error.name === 'TimeoutError' || this.consecutiveFailures >= this.maxConsecutiveFailures) {
         await this.handleConnectionError();
+        this.startAggressiveHealthCheck();
       }
     }
   }
@@ -360,7 +363,16 @@ class SupabaseConnection {
     this.reconnectAttempts++;
     console.warn(`[Supabase] Attempting reconnect (${this.reconnectAttempts}/${this.config.maxReconnectAttempts})`);
     
-    await this.reconnect();
+    try {
+      await this.reconnect();
+    } catch (err) {
+      // If reconnect fails, schedule another attempt in 5 seconds
+      setTimeout(() => {
+        if (this.connectionState !== 'connected') {
+          this.handleConnectionError();
+        }
+      }, 5000);
+    }
   }
 
   private scheduleReconnection(): void {
@@ -766,6 +778,16 @@ class SupabaseConnection {
     this.connectionState = 'disconnected';
     
     console.log('[Supabase] Cleanup completed');
+  }
+
+  // Add a method to start aggressive health checks when disconnected
+  private startAggressiveHealthCheck(): void {
+    if (this.healthCheckTimer) clearInterval(this.healthCheckTimer);
+    this.healthCheckTimer = setInterval(() => {
+      if (this.connectionState !== 'connected') {
+        this.performHealthCheck();
+      }
+    }, 5000); // 5 seconds when disconnected
   }
 }
 
