@@ -218,7 +218,7 @@ const BlogDetail: React.FC = () => {
               </div>
               <div className="flex items-center space-x-2 text-orange-500">
                 <Eye className="w-4 h-4" />
-                <span className="font-medium">{blog.views || 0} views</span>
+                <span className="font-medium">{getViewCount(blog.id)} views</span>
               </div>
             </div>
 

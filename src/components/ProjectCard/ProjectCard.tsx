@@ -41,7 +41,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
   return (
     <motion.div
       whileHover={{ y: -5 }}
-      className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 h-full flex flex-col"
+      className="bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-lg hover:shadow-xl overflow-hidden transition-all duration-300 relative h-full flex flex-col"
     >
       {/* Project Image */}
       <div className="relative">

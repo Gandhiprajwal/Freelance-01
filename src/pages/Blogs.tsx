@@ -20,6 +20,8 @@ const Blogs: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [allTags, setAllTags] = useState<string[]>([]);
+  const [showAllTags, setShowAllTags] = useState(false);
+  const TAG_LIMIT = 8;
   
   const postsPerPage = siteConfig.content.blog.postsPerPage || 12;
   const [displayedBlogs, setDisplayedBlogs] = useState<Blog[]>([]);
@@ -443,7 +445,7 @@ const Blogs: React.FC = () => {
                   <Filter className="w-4 h-4 text-gray-500" />
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filter by tags:</span>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 items-center">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -456,7 +458,7 @@ const Blogs: React.FC = () => {
                   >
                     All
                   </motion.button>
-                  {allTags.map((tag) => (
+                  {(showAllTags ? allTags : allTags.slice(0, TAG_LIMIT)).map((tag) => (
                     <motion.button
                       key={tag}
                       whileHover={{ scale: 1.05 }}
@@ -471,6 +473,14 @@ const Blogs: React.FC = () => {
                       {tag}
                     </motion.button>
                   ))}
+                  {allTags.length > TAG_LIMIT && (
+                    <button
+                      onClick={() => setShowAllTags((prev) => !prev)}
+                      className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
+                    >
+                      {showAllTags ? 'Show less' : `+${allTags.length - TAG_LIMIT} more`}
+                    </button>
+                  )}
                 </div>
               </div>
             )}

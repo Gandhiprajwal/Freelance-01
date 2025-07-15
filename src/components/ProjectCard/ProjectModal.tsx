@@ -4,6 +4,7 @@ import { X, Download, ExternalLink, Code, FileText, Upload, Plus, Trash2 } from 
 import { Project, ProjectFile } from '../../pages/Projects';
 import JSZip from 'jszip';
 import { useAuth } from '../Auth/AuthProvider';
+import { useUserProfile } from '../../lib/useSupabase';
 
 interface ProjectModalProps {
   project: Project | null;
@@ -161,6 +162,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
   };
 
   const currentProject = editingProject || project!;
+  // Fetch owner's profile
+  const { profile: ownerProfile } = useUserProfile(currentProject?.owner_id || '', !isEditing && !!currentProject?.owner_id);
 
   // Add categoryColors, hashStringToColorIndex, and getCategoryColor for badge styling
   const categoryColors = [
@@ -212,6 +215,12 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
               {!isEditing && currentProject.category && (
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ml-0 sm:ml-2 mt-2 sm:mt-0 ${getCategoryColor(currentProject.category)}`}>
                   {currentProject.category}
+                </span>
+              )}
+              {/* Show owner/author if not editing */}
+              {!isEditing && currentProject.owner_id && (
+                <span className="text-xs text-gray-500 ml-0 sm:ml-2 mt-1 sm:mt-0">
+                  Created by: <span className="font-medium text-gray-700 dark:text-gray-200">{ownerProfile?.full_name || ownerProfile?.email || currentProject.owner_id}</span>
                 </span>
               )}
               {!isEditing && (

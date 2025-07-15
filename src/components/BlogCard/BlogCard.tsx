@@ -23,8 +23,11 @@ interface BlogCardProps {
 }
 
 const BlogCard: React.FC<BlogCardProps> = ({ blog, onEdit, onDelete }) => {
-  // Remove usePublicBlogViews and getViewCount
-  const viewCount = blog.views || 0;
+  const { publicViews } = usePublicBlogViews();
+  const getViewCount = (blogId: string) => {
+    const blogViews = publicViews.find(view => view.blog_id === blogId);
+    return blogViews?.views || 0;
+  };
 
   return (
     <motion.div
@@ -119,11 +122,10 @@ const BlogCard: React.FC<BlogCardProps> = ({ blog, onEdit, onDelete }) => {
           </div>
           <div className="flex items-center space-x-1 text-orange-500">
             <Eye className="w-4 h-4" />
-            <span className="font-medium">{viewCount} views</span>
+            <span className="font-medium">{getViewCount(blog.id)} views</span>
           </div>
         </div>
-        {/* Add BlogInteractions for likes/comments count */}
-        <BlogInteractions blogId={blog.id} blogSlug={blog.slug} onCommentClick={() => {}} />
+        {/* Remove BlogInteractions for likes/comments count from BlogCard */}
       </div>
     </motion.div>
   );

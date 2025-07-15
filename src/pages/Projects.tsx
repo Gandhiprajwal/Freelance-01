@@ -44,6 +44,8 @@ const Projects: React.FC = () => {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const CATEGORY_LIMIT = 8;
 
   useEffect(() => {
     refreshProjects();
@@ -294,7 +296,7 @@ Downloaded from ROBOSTAAN Projects
                 <Filter className="w-4 h-4 text-gray-500" />
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Filter by category:</span>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 items-center">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -307,7 +309,7 @@ Downloaded from ROBOSTAAN Projects
                 >
                   All
                 </motion.button>
-                {categories.map((cat) => (
+                {(showAllCategories ? categories : categories.slice(0, CATEGORY_LIMIT)).map((cat) => (
                   <motion.button
                     key={cat}
                     whileHover={{ scale: 1.05 }}
@@ -322,6 +324,14 @@ Downloaded from ROBOSTAAN Projects
                     {cat}
                   </motion.button>
                 ))}
+                {categories.length > CATEGORY_LIMIT && (
+                  <button
+                    onClick={() => setShowAllCategories((prev) => !prev)}
+                    className="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
+                  >
+                    {showAllCategories ? 'Show less' : `+${categories.length - CATEGORY_LIMIT} more`}
+                  </button>
+                )}
               </div>
             </div>
           )}
